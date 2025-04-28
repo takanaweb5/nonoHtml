@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+
+<html lang="ja">
+<script async type="module">
+  import { transpile, ScriptTarget } from "https://esm.sh/typescript@5.6.3?target=esnext";
+  import { minify } from "https://esm.sh/terser@5.36.0?target=esnext";
+
+  // esnext-polyfill
+  Uint8Array.prototype.toBase64 ??= function () {
+    return btoa(Array.from(this, (v) => String.fromCharCode(v)).join(""));
+  }
+
+  // すべてのスクリプトを処理
+  processScripts();
+
+  async function processTypeScriptContent(tsCode) {
+    const js = transpile(tsCode, {
+      target: ScriptTarget.ESNext
+    });
+
+    const { code } = await minify(js, {
+      module: true
+    });
+
+    await import(`data:text/javascript;base64,${new TextEncoder().encode(code).toBase64()}`);
+  }
+
+  async function processScripts() {
+    for (const script of document.getElementsByTagName("script")) {
+      // インラインTypeScriptの処理
+      if (script.type === "text/typescript" && script.textContent) {
+        await processTypeScriptContent(script.textContent);
+        continue;
+      }
+
+      // 外部TypeScriptファイルの処理
+      if (script.type === "text/typescript" && script.src) {
+        try {
+          const response = await fetch(script.src);
+          if (!response.ok) {
+            console.error(`Failed to load: ${script.src}`);
+            continue;
+          }
+          const tsCode = await response.text();
+          await processTypeScriptContent(tsCode);
+        } catch (error) {
+          console.error(`Error processing ${script.src}:`, error);
+        }
+      }
+    }
+  }
+</script>
+<script src="script.ts" type="text/typescript"></script>
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" type="text/css" href="styles.css">
+  <title>お絵かきロジック</title>
+</head>
+
+<body>
+  <h1>お絵かきロジック</h1>
+  <div class="grid"></div>
+</body>
+
+</html>

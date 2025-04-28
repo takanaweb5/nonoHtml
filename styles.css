@@ -1,0 +1,79 @@
+/* styles.css */
+:root {
+  --border-color: gray;
+}
+
+.grid {
+  display: grid;
+  width: fit-content;
+  height: fit-content;
+  grid-template-columns: auto repeat(var(--numCols), var(--cellSize));
+  grid-template-rows: auto repeat(var(--numRows), var(--cellSize));
+  grid-gap: 0;
+}
+
+/* cellのデフォルト値 */
+.grid>div {
+  display: flex;
+  width: var(--cellSize);
+  height: var(--cellSize);
+  font-size: var(--fontSize);
+  border-top: 1px solid var(--border-color);
+  border-left: 1px solid var(--border-color);
+  align-items: center;
+  color: transparent;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* 左上のセル */
+.grid> :first-child {
+  width: auto;
+  height: auto;
+  cursor: default;
+}
+
+/* 縦のヒント */
+.grid>.v-hint {
+  height: auto;
+  writing-mode: vertical-lr;
+  padding: 4px 0;
+  color: black;
+  cursor: default;
+  user-select: auto;
+}
+
+/* 横のヒント */
+.grid>.h-hint {
+  width: auto;
+  padding: 0 4px;
+  color: black;
+  cursor: default;
+  user-select: auto;
+}
+
+.grid>.last-row {
+  border-bottom: 1px solid var(--border-color);
+}
+
+.grid>.last-col {
+  border-right: 1px solid var(--border-color);
+}
+
+.Black {
+  background-color: black;
+}
+
+.White {
+  background-color: white;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><line x1="0" y1="0" x2="100" y2="100" stroke="black" stroke-width="4"/><line x1="100" y1="0" x2="0" y2="100" stroke="black" stroke-width="4"/></svg>');
+  background-size: 100% 100%;
+}
+
+.Unknown {
+  background-color: white;
+}
+
+.Six-ten {
+  background-color: rgb(200, 255, 255);
+}

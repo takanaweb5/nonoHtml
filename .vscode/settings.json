@@ -1,0 +1,10 @@
+{
+  "files.exclude": {
+    "bak/": true,
+    "good/": true,
+    ".vscode/": false,
+    "*.js": true,
+    ".gitignore": true,
+    ".gitattributes": true,
+  }
+}
