@@ -244,13 +244,13 @@ async function solve() {
     isRow: boolean,
     index: number,
     rowOrCol: number[]
-  ): Array<{ row: number, col: number, value: string }> {
-    const changedCells: Array<{ row: number, col: number, value: string }> = [];
+  ) {
     const unknownCells: HTMLDivElement[] = [];
-    for (let j = 0; j < rowOrCol.length; j++) {
-      const cell = cells[isRow ? index : j + 1][isRow ? j + 1 : index];
-      if (cell && rowOrCol[j] === 0) {
-        unknownCells.push(cell);
+    for (let j = 1; j < rowOrCol.length; j++) {
+      const row = isRow ? index : j;
+      const col = !isRow ? index : j;
+      if (rowOrCol[j] === 0) {
+        unknownCells.push(cells[row][col]);
       }
     }
     if (unknownCells.length > 0) {
@@ -258,39 +258,47 @@ async function solve() {
       const fillCount = Math.floor(Math.random() * unknownCells.length) + 1;
       for (let k = 0; k < fillCount; k++) {
         const cell = unknownCells[k];
-        const color = Math.random() < 0.5 ? '1' : '2';
-        let rowIdx = isRow ? index : (cell.dataset && cell.dataset.row ? Number(cell.dataset.row) : k + 1);
-        let colIdx = isRow ? (cell.dataset && cell.dataset.col ? Number(cell.dataset.col) : k + 1) : index;
-        solveCells[rowIdx][colIdx] = Number(color);
-        changedCells.push({ row: rowIdx, col: colIdx, value: color });
+        const row = isRow ? index : Number(cell.dataset.row);
+        const col = !isRow ? index : Number(cell.dataset.col);
+        const color = Math.random() < 0.5 ? 1 : 2;
+        solveCells[row][col] = color;
       }
     }
-    return changedCells;
   }
 
-  function drawCells(changes: { row: number, col: number, value: string }[]) {
-    for (const { row, col, value } of changes) {
-      const cell = cells[row][col];
-      cell.textContent = value;
+  // セルの見た目を描画する関数
+  function drawCells(isRow: boolean, index: number, rowOrCol: number[]) {
+    for (let j = 1; j < rowOrCol.length; j++) {
+      const row = isRow ? index : j;
+      const col = !isRow ? index : j;
+      // 変更があった場合だけ表示を更新
+      if (rowOrCol[j] !== solveCells[row][col]) {
+        cells[row][col].textContent = String(solveCells[row][col]);
+      }
     }
   }
 
   async function processCells(isRow: boolean) {
     const num = isRow ? numRows : numCols;
     for (let i = 1; i <= num; i++) {
-      const rowOrCol: number[] = [];
+      // 0番目はダミーで indexとcellsのindexを合わせる
+      const rowOrCol: number[] = new Array((isRow ? numCols : numRows) + 1).fill(0);
       for (let j = 1; j <= (isRow ? numCols : numRows); j++) {
-        const cell = cells[isRow ? i : j][isRow ? j : i];
-        if (cell) {
-          rowOrCol.push(Number(cell.textContent));
-        }
+        const row = isRow ? i : j;
+        const col = !isRow ? i : j;
+        rowOrCol[j] = Number(cells[row][col].textContent);
       }
-      const changes = processSingleLineOrCol(isRow, i, rowOrCol);
+      processSingleLineOrCol(isRow, i, rowOrCol);
 
-      // アニメーション用
-      if (changes.length > 0) {
+      // 対象行または列に変更があるか判定し、変更があれば表示を更新
+      const hasDiff = rowOrCol.some((val, j) => {
+        const row = isRow ? i : j;
+        const col = !isRow ? i : j;
+        return val !== solveCells[row][col];
+      });
+      if (hasDiff) {
         await new Promise<void>(resolve => requestAnimationFrame(() => {
-          drawCells(changes);
+          drawCells(isRow, i, rowOrCol);
           resolve();
         }));
       }
