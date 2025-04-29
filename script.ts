@@ -232,24 +232,22 @@ function randomizeCells(cellsArr: HTMLDivElement[]) {
 async function solve() {
   // solve用の2次元配列（1-indexedでcellsと同じ構造）
   // 1-indexedで使うため0番目は未使用
-  const solveCells: number[][] = Array.from({ length: numRows + 1 }, () => Array(numCols + 1).fill(0));
+  const beforeCells: number[][] = Array.from({ length: numRows + 1 }, () => Array(numCols + 1).fill(0));
+  const afterCells: number[][] = Array.from({ length: numRows + 1 }, () => Array(numCols + 1).fill(0));
   for (let row = 1; row <= numRows; row++) {
     for (let col = 1; col <= numCols; col++) {
-      solveCells[row][col] = Number(cells[row][col].textContent);
+      beforeCells[row][col] = Number(cells[row][col].textContent);
+      afterCells[row][col] = Number(cells[row][col].textContent);
     }
   }
   // 行と列の処理を共通化する関数
   // 1行または1列単位の処理を関数化
-  function processSingleLineOrCol(
-    isRow: boolean,
-    index: number,
-    rowOrCol: number[]
-  ) {
+  function processSingleLineOrCol(isRow: boolean, index: number) {
     const unknownCells: HTMLDivElement[] = [];
-    for (let j = 1; j < rowOrCol.length; j++) {
-      const row = isRow ? index : j;
-      const col = !isRow ? index : j;
-      if (rowOrCol[j] === 0) {
+    const limit = isRow ? numCols : numRows;
+    for (let j = 1; j <= limit; j++) {
+      const [row, col] = isRow ? [index, j] : [j, index];
+      if (beforeCells[row][col] === 0) {
         unknownCells.push(cells[row][col]);
       }
     }
@@ -258,22 +256,21 @@ async function solve() {
       const fillCount = Math.floor(Math.random() * unknownCells.length) + 1;
       for (let k = 0; k < fillCount; k++) {
         const cell = unknownCells[k];
-        const row = isRow ? index : Number(cell.dataset.row);
-        const col = !isRow ? index : Number(cell.dataset.col);
+        const [row, col] = isRow ? [index, Number(cell.dataset.col)] : [Number(cell.dataset.row), index];
         const color = Math.random() < 0.5 ? 1 : 2;
-        solveCells[row][col] = color;
+        afterCells[row][col] = color;
       }
     }
   }
 
   // セルの見た目を描画する関数
-  function drawCells(isRow: boolean, index: number, rowOrCol: number[]) {
-    for (let j = 1; j < rowOrCol.length; j++) {
-      const row = isRow ? index : j;
-      const col = !isRow ? index : j;
-      // 変更があった場合だけ表示を更新
-      if (rowOrCol[j] !== solveCells[row][col]) {
-        cells[row][col].textContent = String(solveCells[row][col]);
+  function drawCells(isRow: boolean, index: number) {
+    const limit = isRow ? numCols : numRows;
+    for (let j = 1; j <= limit; j++) {
+      const [row, col] = isRow ? [index, j] : [j, index];
+      // 変更がある場合のみ描画する
+      if (beforeCells[row][col] !== afterCells[row][col]) {
+        cells[row][col].textContent = String(afterCells[row][col]);
       }
     }
   }
@@ -281,26 +278,29 @@ async function solve() {
   async function processCells(isRow: boolean) {
     const num = isRow ? numRows : numCols;
     for (let i = 1; i <= num; i++) {
-      // 0番目はダミーで indexとcellsのindexを合わせる
-      const rowOrCol: number[] = new Array((isRow ? numCols : numRows) + 1).fill(0);
-      for (let j = 1; j <= (isRow ? numCols : numRows); j++) {
-        const row = isRow ? i : j;
-        const col = !isRow ? i : j;
-        rowOrCol[j] = Number(cells[row][col].textContent);
-      }
-      processSingleLineOrCol(isRow, i, rowOrCol);
+      processSingleLineOrCol(isRow, i);
 
       // 対象行または列に変更があるか判定し、変更があれば表示を更新
-      const hasDiff = rowOrCol.some((val, j) => {
-        const row = isRow ? i : j;
-        const col = !isRow ? i : j;
-        return val !== solveCells[row][col];
-      });
+      const limit = isRow ? numCols : numRows;
+      const hasDiff = (() => {
+        for (let j = 1; j <= limit; j++) {
+          const [row, col] = isRow ? [i, j] : [j, i];
+          if (beforeCells[row][col] !== afterCells[row][col]) {
+            return true;
+          }
+        }
+        return false;
+      })();
       if (hasDiff) {
         await new Promise<void>(resolve => requestAnimationFrame(() => {
-          drawCells(isRow, i, rowOrCol);
+          drawCells(isRow, i);
           resolve();
         }));
+        // 描画完了分をbeforeCellsに反映
+        for (let j = 1; j <= limit; j++) {
+          const [row, col] = isRow ? [i, j] : [j, i];
+          beforeCells[row][col] = afterCells[row][col];
+        }
       }
     }
   }
