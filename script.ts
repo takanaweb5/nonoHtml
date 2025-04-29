@@ -211,104 +211,132 @@ function clearGrid() {
   }
 }
 
+function isPuzzleComplete() {
+  for (let row = 1; row <= numRows; row++) {
+    for (let col = 1; col <= numCols; col++) {
+      const cell = cells[row][col];
+      if (!cell || cell.textContent === '0') return false;
+    }
+  }
+  return true;
+}
+
+function randomizeCells(cellsArr: HTMLDivElement[]) {
+  for (let i = cellsArr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [cellsArr[i], cellsArr[j]] = [cellsArr[j], cellsArr[i]];
+  }
+}
+
 //アニメーション
-(function setupRandomFillAnimation() {
-  const title = document.querySelector('h1');
-  if (!title) return;
+async function solve() {
+  // solve用の2次元配列（1-indexedでcellsと同じ構造）
+  // 1-indexedで使うため0番目は未使用
+  const solveCells: number[][] = Array.from({ length: numRows + 1 }, () => Array(numCols + 1).fill(0));
+  for (let row = 1; row <= numRows; row++) {
+    for (let col = 1; col <= numCols; col++) {
+      solveCells[row][col] = Number(cells[row][col].textContent);
+    }
+  }
+  // 行と列の処理を共通化する関数
+  // 1行または1列単位の処理を関数化
+  function processSingleLineOrCol(
+    isRow: boolean,
+    index: number,
+    rowOrCol: number[]
+  ): Array<{ row: number, col: number, value: string }> {
+    const changedCells: Array<{ row: number, col: number, value: string }> = [];
+    const unknownCells: HTMLDivElement[] = [];
+    for (let j = 0; j < rowOrCol.length; j++) {
+      const cell = cells[isRow ? index : j + 1][isRow ? j + 1 : index];
+      if (cell && rowOrCol[j] === 0) {
+        unknownCells.push(cell);
+      }
+    }
+    if (unknownCells.length > 0) {
+      randomizeCells(unknownCells);
+      const fillCount = Math.floor(Math.random() * unknownCells.length) + 1;
+      for (let k = 0; k < fillCount; k++) {
+        const cell = unknownCells[k];
+        const color = Math.random() < 0.5 ? '1' : '2';
+        let rowIdx = isRow ? index : (cell.dataset && cell.dataset.row ? Number(cell.dataset.row) : k + 1);
+        let colIdx = isRow ? (cell.dataset && cell.dataset.col ? Number(cell.dataset.col) : k + 1) : index;
+        solveCells[rowIdx][colIdx] = Number(color);
+        changedCells.push({ row: rowIdx, col: colIdx, value: color });
+      }
+    }
+    return changedCells;
+  }
 
-  let startTime: number = 0;
-  title.addEventListener('click', () => {
+  function drawCells(changes: { row: number, col: number, value: string }[]) {
+    for (const { row, col, value } of changes) {
+      const cell = cells[row][col];
+      cell.textContent = value;
+    }
+  }
+
+  async function processCells(isRow: boolean) {
+    const num = isRow ? numRows : numCols;
+    for (let i = 1; i <= num; i++) {
+      const rowOrCol: number[] = [];
+      for (let j = 1; j <= (isRow ? numCols : numRows); j++) {
+        const cell = cells[isRow ? i : j][isRow ? j : i];
+        if (cell) {
+          rowOrCol.push(Number(cell.textContent));
+        }
+      }
+      const changes = processSingleLineOrCol(isRow, i, rowOrCol);
+
+      // アニメーション用
+      if (changes.length > 0) {
+        await new Promise<void>(resolve => requestAnimationFrame(() => {
+          drawCells(changes);
+          resolve();
+        }));
+        await sleep();
+      }
+    }
+  }
+
+  while (!isPuzzleComplete()) {
+    await processCells(true);
+    await processCells(false);
+  }
+}
+
+function sleep() {
+  return new Promise(resolve => setTimeout(resolve, 1));
+}
+// イベントリスナーの修正
+
+const title = document.querySelector('h1');
+if (title) {
+  title.addEventListener('click', handleTitleClick);
+}
+
+async function handleTitleClick() {
+  // 事前準備
+  await new Promise<void>(resolve => requestAnimationFrame(() => {
+    const oldMsg = document.getElementById('finish-msg');
+    if (oldMsg) oldMsg.remove();
     clearGrid();
-    startTime = Date.now();
-    function isPuzzleComplete() {
-      for (let row = 1; row <= numRows; row++) {
-        for (let col = 1; col <= numCols; col++) {
-          const cell = cells[row][col];
-          if (!cell || cell.textContent === '0') return false;
-        }
-      }
-      return true;
-    }
+    resolve();
+  }));
+  await sleep();
+  const startTime = Date.now();
+  await solve();
+  const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
 
-    function randomizeCells(cellsArr: HTMLDivElement[]) {
-      for (let i = cellsArr.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [cellsArr[i], cellsArr[j]] = [cellsArr[j], cellsArr[i]];
-      }
-    }
+  // 新しいメッセージノードを作成
+  const msg = document.createElement('span');
+  msg.id = 'finish-msg';
+  msg.textContent = `　完成しました！経過時間: ${elapsedSec} 秒`;
 
-    function processRows(next: () => void) {
-      let row = 1;
-      function processNextRow() {
-        if (row > numRows) {
-          next();
-          return;
-        }
-        // 行内のunknownセルを取得
-        const unknownCells: HTMLDivElement[] = [];
-        for (let col = 1; col <= numCols; col++) {
-          const cell = cells[row][col];
-          if (!cell || cell.textContent !== '0') continue;
-          unknownCells.push(cell);
-        }
-        if (unknownCells.length > 0) {
-          randomizeCells(unknownCells);
-          // ランダムな数だけ確定（1〜unknownCells.length）
-          const fillCount = Math.floor(Math.random() * unknownCells.length) + 1;
-          for (let i = 0; i < fillCount; i++) {
-            const cell = unknownCells[i];
-            const color = Math.random() < 0.5 ? '1' : '2';
-            cell.textContent = color;
-          }
-        }
-        row++;
-        requestAnimationFrame(processNextRow);
-      }
-      processNextRow();
-    }
+  // h1タグのテキスト直後に挿入
+  if (title && title.firstChild) {
+    title.insertBefore(msg, title.firstChild.nextSibling);
+  } else if (title) {
+    title.appendChild(msg);
+  }
+}
 
-    function processCols(next: () => void) {
-      let col = 1;
-      function processNextCol() {
-        if (col > numCols) {
-          next();
-          return;
-        }
-        // 列内のunknownセルを取得
-        const unknownCells: HTMLDivElement[] = [];
-        for (let row = 1; row <= numRows; row++) {
-          const cell = cells[row][col];
-          if (!cell || cell.textContent !== '0') continue;
-          unknownCells.push(cell);
-        }
-        if (unknownCells.length > 0) {
-          randomizeCells(unknownCells);
-          // ランダムな数だけ確定（1〜unknownCells.length）
-          const fillCount = Math.floor(Math.random() * unknownCells.length) + 1;
-          for (let i = 0; i < fillCount; i++) {
-            const cell = unknownCells[i];
-            const color = Math.random() < 0.5 ? '1' : '2';
-            cell.textContent = color;
-          }
-        }
-        col++;
-        requestAnimationFrame(processNextCol);
-      }
-      processNextCol();
-    }
-
-    function animateLoop() {
-      if (isPuzzleComplete()) {
-        const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
-        alert(`完成しました！\n経過時間: ${elapsedSec} 秒`);
-        return;
-      }
-      processRows(() => {
-        processCols(() => {
-          requestAnimationFrame(animateLoop);
-        });
-      });
-    }
-    animateLoop();
-  });
-})();
