@@ -293,7 +293,6 @@ async function solve() {
           drawCells(changes);
           resolve();
         }));
-        await sleep();
       }
     }
   }
@@ -304,16 +303,12 @@ async function solve() {
   }
 }
 
-function sleep() {
-  return new Promise(resolve => setTimeout(resolve, 1));
-}
-// イベントリスナーの修正
-
 const title = document.querySelector('h1');
 if (title) {
   title.addEventListener('click', handleTitleClick);
 }
 
+// 解析開始イベント
 async function handleTitleClick() {
   // 事前準備
   await new Promise<void>(resolve => requestAnimationFrame(() => {
@@ -322,7 +317,6 @@ async function handleTitleClick() {
     clearGrid();
     resolve();
   }));
-  await sleep();
   const startTime = Date.now();
   await solve();
   const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
