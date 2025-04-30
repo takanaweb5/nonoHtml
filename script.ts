@@ -1,4 +1,4 @@
-const cellsPerDraw = 5; // 一度に描画するセル数(アニメーション速度に影響)
+const cellsPerFrame = 5; // 1フレームで何セル分アニメーションさせるか
 const numCols = 30;
 const numRows = 20;
 const cellSize = 16;
@@ -233,7 +233,7 @@ function randomizeCells(cellsArr: HTMLDivElement[]) {
 async function solve() {
   // solve用の2次元配列（1-indexedでcellsと同じ構造）
   // 1-indexedで使うため0番目は未使用
-  const isCellDrawn: boolean[][] = Array.from({ length: numRows + 1 }, () => Array(numCols + 1).fill(false));
+  const isCellFixed: boolean[][] = Array.from({ length: numRows + 1 }, () => Array(numCols + 1).fill(false));
 
   // 行と列の処理を共通化する関数
   // 1行または1列単位の処理を関数化
@@ -245,51 +245,49 @@ async function solve() {
     // 未知セル収集
     for (let j = 1; j <= limit; j++) {
       const [row, col] = isRow ? [index, j] : [j, index];
-      if (!isCellDrawn[row][col]) {
+      if (!isCellFixed[row][col]) {
         unknownCells.push(cells[row][col]);
       }
     }
 
-    if (unknownCells.length > 0) {
-      randomizeCells(unknownCells);
-      const fillCount = Math.floor(Math.random() * unknownCells.length) + 1;
-      // 0～fillCount-1の範囲でunknownCellsを(row, col)昇順にソート
-      const sorted = unknownCells.slice(0, fillCount).sort((a, b) => {
-        const aRow = Number(a.dataset.row);
-        const aCol = Number(a.dataset.col);
-        const bRow = Number(b.dataset.row);
-        const bCol = Number(b.dataset.col);
-        if (aRow !== bRow) return aRow - bRow;
-        return aCol - bCol;
-      });
-      for (let k = 0; k < fillCount; k++) {
-        unknownCells[k] = sorted[k];
-      }
-      for (let k = 0; k < fillCount; k++) {
-        const cell = unknownCells[k];
-        const [row, col] = isRow ? [index, Number(cell.dataset.col)] : [Number(cell.dataset.row), index];
-        const color = Math.random() < 0.5 ? 1 : 2;
+    if (unknownCells.length === 0) return;
 
-        if (cells[row][col].textContent !== String(color)) {
-          isCellDrawn[row][col] = true;
-          promises.push(new Promise<void>(resolve => {
-            requestAnimationFrame(() => {
-              cells[row][col].textContent = String(color);
-              resolve();
-            });
-          }));
+    randomizeCells(unknownCells);
+    const fillCount = Math.floor(Math.random() * unknownCells.length) + 1;
+    // 0～fillCount-1の範囲でunknownCellsを(row, col)昇順にソート
+    const sorted = unknownCells.slice(0, fillCount).sort((a, b) => {
+      const aRow = Number(a.dataset.row);
+      const aCol = Number(a.dataset.col);
+      const bRow = Number(b.dataset.row);
+      const bCol = Number(b.dataset.col);
+      if (aRow !== bRow) return aRow - bRow;
+      return aCol - bCol;
+    });
+    for (let k = 0; k < fillCount; k++) {
+      const cell = sorted[k];
+      const [row, col] = isRow ? [index, Number(cell.dataset.col)] : [Number(cell.dataset.row), index];
+      const color = Math.random() < 0.5 ? 1 : 2;
 
-          if (promises.length >= cellsPerDraw) {
-            await Promise.all(promises);
-            promises.length = 0;
-          }
+      if (!isCellFixed[row][col]) {
+        isCellFixed[row][col] = true;
+        promises.push(new Promise<void>(resolve => {
+          requestAnimationFrame(() => {
+            cells[row][col].textContent = String(color);
+            resolve();
+          });
+        }));
+
+        // 数セルをまとめてアニメーションさせる(速度調整)
+        if (promises.length >= cellsPerFrame) {
+          await Promise.all(promises);
+          promises.length = 0;
         }
       }
+    }
 
-      // 残り処理
-      if (promises.length > 0) {
-        await Promise.all(promises);
-      }
+    // 残り処理
+    if (promises.length > 0) {
+      await Promise.all(promises);
     }
   }
 
