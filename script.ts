@@ -8,6 +8,9 @@ const cells: HTMLDivElement[][] = Array.from({ length: numRows + 1 }, () =>
   new Array<HTMLDivElement>(numCols + 1)
 );
 
+/**
+ * グリッドを初期化し、セルやヒントの表示・イベント設定を行う。
+ */
 function generateRandomGrid() {
   document.documentElement.style.setProperty('--cellSize', `${cellSize}px`);
   document.documentElement.style.setProperty('--numCols', `${numCols}`);
@@ -107,7 +110,7 @@ function generateRandomGrid() {
 
 /**
  * セルの色を切り替える関数
- * @param {Event} event - イベントオブジェクト
+ * @param event - イベントオブジェクト
  */
 function toggleColor(event: MouseEvent) {
   const cell = event.target as HTMLDivElement;
@@ -119,9 +122,9 @@ function toggleColor(event: MouseEvent) {
 
 /**
  * 指定された列または行のヒント文字列を生成する関数
- * @param {string} colOrRow - 'col' または 'row' の文字列
- * @param {number} num - 列または行の番号
- * @returns {string} - 生成されたヒント文字列 例:'1,3,1'
+ * @param colOrRow - 'col' または 'row' の文字列
+ * @param num - 列または行の番号
+ * @returns 生成されたヒント文字列 例:'1,3,1'
  */
 function getOneLineHintString(colOrRow: string, num: number): string {
   const cells = document.querySelectorAll(`[data-${colOrRow}="${num}"]`);
@@ -145,9 +148,9 @@ function getOneLineHintString(colOrRow: string, num: number): string {
 }
 /**
  * ヒント配列を生成する関数
- * @param {string} colOrRow - 'col' または 'row' の文字列
- * @param {number} length - 行数 または 列数
- * @returns {string[]} - 生成されたヒント配列 例:['1,3,1','2,3']
+ * @param colOrRow - 'col' または 'row' の文字列
+ * @param length - 行数 または 列数
+ * @returns 生成されたヒント配列 例:['1,3,1','2,3']
  */
 function makeHintArray(colOrRow: string, length: number): string[] {
   const result: string[] = [];
@@ -183,12 +186,11 @@ function makeHints() {
   navigator.clipboard.writeText(clipText)
 }
 
-
 /**
  * 行と列からセルの値を取得する
- * @param {number} row - 行番号
- * @param {number} col - 列番号
- * @returns {string} - セルの値
+ * @param row - 行番号
+ * @param col - 列番号
+ * @returns セルの値
  */
 // function getCellValue(row: number, col: number): string {
 //   const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`) as HTMLDivElement;
@@ -199,10 +201,9 @@ function makeHints() {
 generateRandomGrid();
 makeHints();
 
-// いったんすべてクリア
-// clearGrid();
-
-// クリア
+/**
+ * すべてのセルをクリアする。
+ */
 function clearGrid() {
   for (let row = 1; row <= numRows; row++) {
     for (let col = 1; col <= numCols; col++) {
@@ -212,7 +213,12 @@ function clearGrid() {
   }
 }
 
-function isPuzzleComplete() {
+/**
+ * パズルがすべて埋まっているか判定する。
+ * 未入力セルが残っていれば false を返す。
+ * @returns パズルが完成していればtrue、未完成ならfalse
+ */
+function isPuzzleComplete(): boolean {
   for (let row = 1; row <= numRows; row++) {
     for (let col = 1; col <= numCols; col++) {
       const cell = cells[row][col];
@@ -222,19 +228,24 @@ function isPuzzleComplete() {
   return true;
 }
 
-function randomizeCells(cellsArr: HTMLDivElement[]) {
-  for (let i = cellsArr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [cellsArr[i], cellsArr[j]] = [cellsArr[j], cellsArr[i]];
-  }
+/**
+ * 配列内のセル要素をランダムな順序にシャッフルする。
+ * @param cellsArr シャッフル対象のセル配列
+ * @returns なし
+ */
+function shuffleCells(cellsArr: HTMLDivElement[]) {
+    for (let i = 0; i < cellsArr.length - 1; i++) {
+        const j = i + Math.floor(Math.random() * (cellsArr.length - i));
+        [cellsArr[i], cellsArr[j]] = [cellsArr[j], cellsArr[i]];
+    }
 }
 
-//アニメーション
-async function solve() {
-  // solve用の2次元配列（1-indexedでcellsと同じ構造）
-  // 1-indexedで使うため0番目は未使用
-  const isCellFixed: boolean[][] = Array.from({ length: numRows + 1 }, () => Array(numCols + 1).fill(false));
-
+/**
+ * パズルをアニメーションしながら自動で解く。
+ * 行・列ごとにセルを塗りつぶし、全体が埋まるまで繰り返す。
+ * @returns なし
+ */
+async function solve(): Promise<void> {
   // 行と列の処理を共通化する関数
   // 1行または1列単位の処理を関数化
   async function processSingleRowOrCol(isRow: boolean, index: number) {
@@ -252,7 +263,7 @@ async function solve() {
 
     if (unknownCells.length === 0) return;
 
-    randomizeCells(unknownCells);
+    shuffleCells(unknownCells);
     const fillCount = Math.floor(Math.random() * unknownCells.length) + 1;
     // 0～fillCount-1の範囲でunknownCellsを(row, col)昇順にソート
     const sorted = unknownCells.slice(0, fillCount).sort((a, b) => {
@@ -298,6 +309,10 @@ async function solve() {
     }
   }
 
+  // solve用の2次元配列（1-indexedでcellsと同じ構造）
+  // 1-indexedで使うため0番目は未使用
+  const isCellFixed: boolean[][] = Array.from({ length: numRows + 1 }, () => Array(numCols + 1).fill(false));
+
   while (!isPuzzleComplete()) {
     await processCells(true);
     await processCells(false);
@@ -309,8 +324,10 @@ if (title) {
   title.addEventListener('click', handleTitleClick);
 }
 
-// 解析開始イベント
-async function handleTitleClick() {
+/**
+ * 解析開始イベント
+ */
+async function handleTitleClick(): Promise<void> {
   // 事前準備
   await new Promise<void>(resolve => requestAnimationFrame(() => {
     const oldMsg = document.getElementById('finish-msg');
