@@ -1,4 +1,4 @@
-const cellsPerFrame = 5; // 1フレームで何セル分アニメーションさせるか
+const DRAW_PER_FRAME = 5; // 1フレームで何セル分アニメーションさせるか
 const numCols = 30;
 const numRows = 20;
 const cellSize = 16;
@@ -234,10 +234,10 @@ function isPuzzleComplete(): boolean {
  * @returns なし
  */
 function shuffleCells(cellsArr: HTMLDivElement[]) {
-    for (let i = 0; i < cellsArr.length - 1; i++) {
-        const j = i + Math.floor(Math.random() * (cellsArr.length - i));
-        [cellsArr[i], cellsArr[j]] = [cellsArr[j], cellsArr[i]];
-    }
+  for (let i = 0; i < cellsArr.length - 1; i++) {
+    const j = i + Math.floor(Math.random() * (cellsArr.length - i));
+    [cellsArr[i], cellsArr[j]] = [cellsArr[j], cellsArr[i]];
+  }
 }
 
 /**
@@ -249,7 +249,6 @@ async function solve(): Promise<void> {
   // 行と列の処理を共通化する関数
   // 1行または1列単位の処理を関数化
   async function processSingleRowOrCol(isRow: boolean, index: number) {
-    const promises: Promise<void>[] = [];
     const unknownCells: HTMLDivElement[] = [];
     const limit = isRow ? numCols : numRows;
 
@@ -274,6 +273,18 @@ async function solve(): Promise<void> {
       if (aRow !== bRow) return aRow - bRow;
       return aCol - bCol;
     });
+
+    // 複数の描画を一気にまとめてアニメーションする関数
+    const args: { row: number; col: number; color: number }[] = [];
+    function animate(args: { row: number; col: number; color: number }[]) {
+      return new Promise<void>(resolve => {
+        requestAnimationFrame(() => {
+          args.forEach(arg => cells[arg.row][arg.col].textContent = String(arg.color));
+          resolve();
+        });
+      });
+    }
+
     for (let k = 0; k < fillCount; k++) {
       const cell = sorted[k];
       const [row, col] = isRow ? [index, Number(cell.dataset.col)] : [Number(cell.dataset.row), index];
@@ -281,24 +292,19 @@ async function solve(): Promise<void> {
 
       if (!isCellFixed[row][col]) {
         isCellFixed[row][col] = true;
-        promises.push(new Promise<void>(resolve => {
-          requestAnimationFrame(() => {
-            cells[row][col].textContent = String(color);
-            resolve();
-          });
-        }));
+        args.push({ row, col, color });
 
         // 数セルをまとめてアニメーションさせる(速度調整)
-        if (promises.length >= cellsPerFrame) {
-          await Promise.all(promises);
-          promises.length = 0;
+        if (args.length >= DRAW_PER_FRAME) {
+          await animate(args);
+          args.length = 0;
         }
       }
     }
 
     // 残り処理
-    if (promises.length > 0) {
-      await Promise.all(promises);
+    if (args.length > 0) {
+      await animate(args);
     }
   }
 
