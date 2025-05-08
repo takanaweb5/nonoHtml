@@ -546,9 +546,8 @@ function leftAlignLineCells(lineHints: number[], lineCells: number[]): number[] 
   // 結果の配列を作成（すべて白で初期化）
   const result: number[] = new Array(lineCells.length).fill(WHITE);
   for (let i = 0; i < blockCount; i++) {
-    for (let j = leftPos[i]; j <= rightPos[i]; j++) {
-      result[j] = BLACK;
-    }
+    // leftPos[i]～rightPos[i]までの範囲を黒で埋める
+    result.fill(BLACK, leftPos[i], rightPos[i] + 1);
   }
   return result;
 }
