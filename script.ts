@@ -269,7 +269,7 @@ async function solve(colHints: number[][], rowHints: number[][]): Promise<void> 
     // 未知セル収集
     for (let j = 1; j <= limit; j++) {
       const [row, col] = isRow ? [index, j] : [j, index];
-      if (!massBoard[row][col]) {
+      if (!cellBoard[row][col]) {
         unknownCells.push(cells[row][col]);
       }
     }
@@ -293,8 +293,8 @@ async function solve(colHints: number[][], rowHints: number[][]): Promise<void> 
       const [row, col] = isRow ? [index, Number(cell.dataset.col)] : [Number(cell.dataset.row), index];
       const color = Math.random() < 0.5 ? 1 : 2;
 
-      if (massBoard[row][col] === 0) {
-        massBoard[row][col] = color;
+      if (cellBoard[row][col] === 0) {
+        cellBoard[row][col] = color;
         args.push({ row, col, color });
 
         // 数セルをまとめてアニメーションさせる(速度調整)
@@ -336,14 +336,14 @@ async function handleTitleClick() {
 
   mainSolve();
 
-  // const hintList = [1,1,1];
+  // const lineHints = [1,1,1];
   // const blockList = [1,1,1,0,1];
-  // console.log('hintList:');
-  // console.log(hintList);
+  // console.log('lineHints:');
+  // console.log(lineHints);
   // console.log('blockList:');
   // console.log(blockList);
-  // // const result = determineMass(hintList, blockList);
-  //  const result = leftAlignBlocks(hintList, blockList);
+  // // const result = fixLineCells(lineHints, blockList);
+  //  const result = leftAlignBlocks(lineHints, blockList);
   // console.log('result:');
   // console.log(result);
 }
@@ -363,7 +363,7 @@ function makeHintsList(isRow: boolean): number[][] {
   }
   return result;
 }
-let massBoard: number[][];
+let cellBoard: number[][];
 
 async function mainSolve() {
   console.log('解析開始');
@@ -390,20 +390,20 @@ async function mainSolve() {
   await clearGrid();
 
   // solve用の2次元配列
-  massBoard = [];
-  massBoard = Array.from({ length: numRows }, () => Array(numCols).fill(UNKNOWN));
+  cellBoard = [];
+  cellBoard = Array.from({ length: numRows }, () => Array(numCols).fill(UNKNOWN));
 
   // solve開始
   const startTime = Date.now();
-  baseSolve(massBoard, rowHints, colHints);
-  console.log('baseSolve後massBoard：');
-  console.log(massBoard);
+  baseSolve(cellBoard, rowHints, colHints);
+  console.log('baseSolve後cellBoard：');
+  console.log(cellBoard);
   const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
 
-  // massBoardから確定したマスをセルに反映する
+  // cellBoardから確定したマスをセルに反映する
   for (let y = 1; y <= numRows; y++) {
     for (let x = 1; x <= numCols; x++) {
-      cells[y][x].textContent = String(massBoard[y - 1][x - 1]);
+      cells[y][x].textContent = String(cellBoard[y - 1][x - 1]);
     }
   }
 
@@ -426,12 +426,12 @@ async function mainSolve() {
 /**
  * お絵かきロジックを背理法で解く
  * すべての行と列に対して背理法を適用して、確定できるマスが0になるまで繰り返す
- * @param massBoard - お絵かきロジックの状態（白,黒,未）を格納した2次元配列
+ * @param cellBoard - お絵かきロジックの状態（白,黒,未）を格納した2次元配列
  * @param rowHints - すべての行のヒントを格納した配列	例：[[1,2],[1,2,1],[3]]
  * @param colHints - すべての列のヒントを格納した配列	例：[[1,2],[1,2,1],[3]]
  * @returns 確定件数、エラー時は-1
  */
-function baseSolve(massBoard: number[][], rowHints: number[][], colHints: number[][]): number {
+function baseSolve(cellBoard: number[][], rowHints: number[][], colHints: number[][]): number {
   let result = 0;
 
   // 確定できるマスがある間は繰り返す
@@ -439,35 +439,35 @@ function baseSolve(massBoard: number[][], rowHints: number[][], colHints: number
   while (count > 0) {
     count = 0;
 
-    // 各行についてdetermineMassを実行
+    // 各行についてfixLineCellsを実行
     for (let y = 0; y < numRows; y++) {
       // 行データを取得
-      const blockList: number[] = new Array(numCols);
+      const lineCells: number[] = new Array(numCols);
       for (let x = 0; x < numCols; x++) {
-        blockList[x] = massBoard[y][x];
+        lineCells[x] = cellBoard[y][x];
       }
-      const [cnt, updatedBlockList] = determineMass(rowHints[y], blockList);
+      const [cnt, updatedLineCells] = fixLineCells(rowHints[y], lineCells);
       if (cnt === -1) return -1;
       if (cnt > 0) {
         for (let x = 0; x < numCols; x++) {
-          massBoard[y][x] = updatedBlockList[x];
+          cellBoard[y][x] = updatedLineCells[x];
         }
         count += cnt;
       }
     }
 
-    // 各列についてdetermineMassを実行
+    // 各列についてfixLineCellsを実行
     for (let x = 0; x < numCols; x++) {
       // 列データを取得
-      const blockList: number[] = new Array(numRows);
+      const lineCells: number[] = new Array(numRows);
       for (let y = 0; y < numRows; y++) {
-        blockList[y] = massBoard[y][x];
+        lineCells[y] = cellBoard[y][x];
       }
-      const [cnt, updatedBlockList] = determineMass(colHints[x], blockList);
+      const [cnt, updatedLineCells] = fixLineCells(colHints[x], lineCells);
       if (cnt === -1) return -1;
       if (cnt > 0) {
         for (let y = 0; y < numRows; y++) {
-          massBoard[y][x] = updatedBlockList[y];
+          cellBoard[y][x] = updatedLineCells[y];
         }
         count += cnt;
       }
@@ -481,24 +481,23 @@ function baseSolve(massBoard: number[][], rowHints: number[][], colHints: number
 /**
  * いずれかの1行または1列について、対応するヒントに基づき
  * ブロックを出来る限り左揃えにした配列を取得する
- * @param hintList 行または列のヒントを格納した配列	例：[1,2,1]
- * @param blockList 現在のブロック状態（白,黒,未）を格納した配列	例：[未,未,未,未,黒,未,白,未]
+ * @param lineHints 行または列のヒントを格納した配列	例：[1,2,1]
+ * @param lineCells 現在のブロック状態（白,黒,未）を格納した配列	例：[未,未,未,未,黒,未,白,未]
  * @returns 左揃えのブロック状態（白,黒,未）を格納した配列、エラー時はnull	例：[黒,白,白,黒,黒,白,白,黒]
  */
-
-function leftAlignBlocks(hintList: number[], blockList: number[]): number[] | null {
-  const blockCount = hintList.length;
-  const massCount = blockList.length;
+function leftAlignLineCells(lineHints: number[], lineCells: number[]): number[] | null {
+  const blockCount = lineHints.length;
+  const cellCount = lineCells.length;
 
   // 最も右端の黒マスの位置を保存（存在しない場合は-1を設定）
-  const maxRightPos = blockList.lastIndexOf(BLACK);
+  const maxRightPos = lineCells.lastIndexOf(BLACK);
 
   // 各ブロックの右端と左端の位置を格納する配列を定義
   const rightPos: number[] = new Array(blockCount);
   const leftPos: number[] = new Array(blockCount);
 
   let k = 0;
-  rightPos[k] = hintList[k] - 1;
+  rightPos[k] = lineHints[k] - 1;
 
   outer: while (true) {
     // 最後(最も右端)のブロックの時
@@ -510,14 +509,14 @@ function leftAlignBlocks(hintList: number[], blockList: number[]): number[] | nu
     }
 
     // カレントブロックの左端を設定
-    leftPos[k] = rightPos[k] - hintList[k] + 1;
+    leftPos[k] = rightPos[k] - lineHints[k] + 1;
 
     // カレントブロック内を右端から左端に向かって1文字ずつ照合
     for (let i = rightPos[k]; i >= leftPos[k]; i--) {
-      if (blockList[i] === WHITE) {
+      if (lineCells[i] === WHITE) {
         // 白マスの右にカレントブロック全体をシフト
-        rightPos[k] = i + hintList[k];
-        if (rightPos[k] >= massCount) return null;// ブロックの右端がはみ出た
+        rightPos[k] = i + lineHints[k];
+        if (rightPos[k] >= cellCount) return null;// ブロックの右端がはみ出た
         // カレントブロックをやり直し
         continue outer; // 外側のループを続ける
       }
@@ -526,7 +525,7 @@ function leftAlignBlocks(hintList: number[], blockList: number[]): number[] | nu
     // カレントブロックの左隣のマスから左側のブロックまで1文字ずつ照合
     const tmp = k > 0 ? rightPos[k - 1] + 1 : 0;
     for (let i = leftPos[k] - 1; i >= tmp; i--) {
-      if (blockList[i] === BLACK) {
+      if (lineCells[i] === BLACK) {
         if (k === 0) return null; // 先頭(最も左端)ブロックのさらに左に黒マスあり
         // 左側のブロックの右端を黒マスの位置まで右側にシフト
         rightPos[k - 1] = i;
@@ -540,56 +539,56 @@ function leftAlignBlocks(hintList: number[], blockList: number[]): number[] | nu
     k++;
     if (k >= blockCount) break;
 
-    rightPos[k] = rightPos[k - 1] + 1 + hintList[k];
-    if (rightPos[k] >= massCount) return null;
+    rightPos[k] = rightPos[k - 1] + 1 + lineHints[k];
+    if (rightPos[k] >= cellCount) return null;
   }
 
   // 結果の配列を作成（すべて白で初期化）
-  const outBlockList: number[] = new Array(blockList.length).fill(WHITE);
+  const result: number[] = new Array(lineCells.length).fill(WHITE);
   for (let i = 0; i < blockCount; i++) {
     for (let j = leftPos[i]; j <= rightPos[i]; j++) {
-      outBlockList[j] = BLACK;
+      result[j] = BLACK;
     }
   }
-  return outBlockList;
+  return result;
 }
 
 /**
  * いずれかの1行または1列について、ヒントと現在のブロック状態に基づいて、
  * 確定可能なマスを全て確定する
  * 引数:
- * @param hintList 行または列のヒントを格納した配列
- * @param blockList 現在のブロック状態（白,黒,未）を格納した配列
+ * @param lineHints 行または列のヒントを格納した配列
+ * @param lineCells 現在のブロック状態（白,黒,未）を格納した配列
  * @returns Tuple
  * - number: 確定したマスの数、エラー時は-1
  * - number[]: 確定可能なマスを全て確定した後の配列
  */
-function determineMass(hintList: number[], blockList: number[]): [number, number[]] {
+function fixLineCells(lineHints: number[], lineCells: number[]): [number, number[]] {
   // ブロックを左寄せする
-  const leftAligned = leftAlignBlocks(hintList, blockList);
+  const leftAligned = leftAlignLineCells(lineHints, lineCells);
   if (leftAligned === null) return [-1, []];
 
   // ブロックを右寄せする
-  // const tmp1 = [...hintList].reverse();
+  // const tmp1 = [...lineHints].reverse();
   // const tmp2 = [...blockList].reverse();
   // const tmp3 = leftAlignBlocks(tmp1, tmp2) || [];
   // const rightAlignedBlock = tmp3.reverse();
 
-  const result = Array.from(blockList);
-  const testBlocks = Array.from(blockList);
-  let counter = 0;
+  const result = Array.from(lineCells);
+  const testLineCells = Array.from(lineCells);
+  let count = 0;
 
-  for (let i = 0; i < blockList.length; i++) {
-    if (testBlocks[i] === UNKNOWN) {
-      testBlocks[i] = leftAligned[i] == BLACK ? WHITE : BLACK;
-      if (leftAlignBlocks(hintList, testBlocks) === null) {
+  for (let i = 0; i < lineCells.length; i++) {
+    if (testLineCells[i] === UNKNOWN) {
+      testLineCells[i] = leftAligned[i] == BLACK ? WHITE : BLACK;
+      if (leftAlignLineCells(lineHints, testLineCells) === null) {
         // 矛盾すれば仮定と反対の色で確定
         result[i] = leftAligned[i];
-        counter++;
+        count++;
       }
       // 元に戻す
-      testBlocks[i] = UNKNOWN;
+      testLineCells[i] = UNKNOWN;
     }
   }
-  return [counter, result];
+  return [count, result];
 }
