@@ -547,12 +547,8 @@ function leftAlignBlocks(hintList: number[], blockList: number[]): number[] | nu
   // 結果の配列を作成（すべて白で初期化）
   const outBlockList: number[] = new Array(blockList.length).fill(WHITE);
   for (let i = 0; i < blockCount; i++) {
-    const left = leftPos[i];
-    const right = rightPos[i];
-    if (0 <= left && left <= right && right < massCount) {
-      for (let j = left; j <= right; j++) {
-        outBlockList[j] = BLACK;
-      }
+    for (let j = leftPos[i]; j <= rightPos[i]; j++) {
+      outBlockList[j] = BLACK;
     }
   }
   return outBlockList;
