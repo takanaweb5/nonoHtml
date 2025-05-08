@@ -2,8 +2,8 @@ const WHITE = 2;
 const BLACK = 1;
 const UNKNOWN = 0;
 const DRAW_PER_FRAME = 2; // 1フレームで何セル分アニメーションさせるか
-const numCols = 50;
-const numRows = 30;
+const numCols = 30;
+const numRows = 20;
 const cellSize = 16;
 const fontSize = cellSize * 0.8;
 // 2次元配列の初期化
@@ -351,7 +351,7 @@ async function handleTitleClick() {
 /**
  * 0列目または0行目からヒントの配列を取得する
  * @param isRow - trueなら行ヒント、falseなら列ヒント
- * @returns 例：[[1,3,1],[2,3]]
+ * @returns 例：[[1,3,1],[2,3],[3]]
  */
 function makeHintsList(isRow: boolean): number[][] {
   const result: number[][] = [];
@@ -427,8 +427,8 @@ async function mainSolve() {
  * お絵かきロジックを背理法で解く
  * すべての行と列に対して背理法を適用して、確定できるマスが0になるまで繰り返す
  * @param massBoard - お絵かきロジックの状態（白,黒,未）を格納した2次元配列
- * @param rowHints - すべての行のヒントを格納した配列
- * @param colHints - すべての列のヒントを格納した配列
+ * @param rowHints - すべての行のヒントを格納した配列	例：[[1,2],[1,2,1],[3]]
+ * @param colHints - すべての列のヒントを格納した配列	例：[[1,2],[1,2,1],[3]]
  * @returns 確定件数、エラー時は-1
  */
 function baseSolve(massBoard: number[][], rowHints: number[][], colHints: number[][]): number {
@@ -481,23 +481,19 @@ function baseSolve(massBoard: number[][], rowHints: number[][], colHints: number
 /**
  * いずれかの1行または1列について、対応するヒントに基づき
  * ブロックを出来る限り左揃えにした配列を取得する
- * @param hintList 行または列のヒントを格納した配列
- * @param blockList 現在のブロック状態（白,黒,未）を格納した配列
- * @returns 左揃えのブロック状態（白,黒,未）を格納した配列、エラー時はnull
+ * @param hintList 行または列のヒントを格納した配列	例：[1,2,1]
+ * @param blockList 現在のブロック状態（白,黒,未）を格納した配列	例：[未,未,未,未,黒,未,白,未]
+ * @returns 左揃えのブロック状態（白,黒,未）を格納した配列、エラー時はnull	例：[黒,白,白,黒,黒,白,白,黒]
  */
 
 function leftAlignBlocks(hintList: number[], blockList: number[]): number[] | null {
   const blockCount = hintList.length;
   const massCount = blockList.length;
 
-  // 最も右にある黒マスのインデックス（なければ -1）
-  const maxRightPos = (() => {
-    for (let i = massCount - 1; i >= 0; i--) {
-      if (blockList[i] === BLACK) return i;
-    }
-    return -1;
-  })();
+  // 最も右端の黒マスの位置を保存（存在しない場合は-1を設定）
+  const maxRightPos = blockList.lastIndexOf(BLACK);
 
+  // 各ブロックの右端と左端の位置を格納する配列を定義
   const rightPos: number[] = new Array(blockCount);
   const leftPos: number[] = new Array(blockCount);
 
@@ -528,32 +524,32 @@ function leftAlignBlocks(hintList: number[], blockList: number[]): number[] | nu
     }
 
     // カレントブロックの左隣のマスから左側のブロックまで1文字ずつ照合
-    const leftLimit = k > 0 ? rightPos[k - 1] + 1 : 0;
-    for (let i = leftPos[k] - 1; i >= leftLimit; i--) {
+    const tmp = k > 0 ? rightPos[k - 1] + 1 : 0;
+    for (let i = leftPos[k] - 1; i >= tmp; i--) {
       if (blockList[i] === BLACK) {
-        if (k === 0) return null; // 先頭ブロックのさらに左に黒マスあり
+        if (k === 0) return null; // 先頭(最も左端)ブロックのさらに左に黒マスあり
         // 左側のブロックの右端を黒マスの位置まで右側にシフト
         rightPos[k - 1] = i;
-        // カレントブロックをやり直し
-        k -= 1;
+        // 1つ前(左)のブロックをやり直し
+        k--;
         continue outer; // 外側のループを続ける
       }
     }
 
     // 次のブロックへ進む
-    k += 1;
+    k++;
     if (k >= blockCount) break;
 
-    rightPos[k] = rightPos[k - 1] + hintList[k] + 1;
+    rightPos[k] = rightPos[k - 1] + 1 + hintList[k];
     if (rightPos[k] >= massCount) return null;
   }
 
-  // 結果の配列を作成（すべてWHITEで初期化）
-  const outBlockList: number[] = new Array(massCount).fill(WHITE);
+  // 結果の配列を作成（すべて白で初期化）
+  const outBlockList: number[] = new Array(blockList.length).fill(WHITE);
   for (let i = 0; i < blockCount; i++) {
     const left = leftPos[i];
     const right = rightPos[i];
-    if (left >= 0 && right < massCount && left <= right) {
+    if (0 <= left && left <= right && right < massCount) {
       for (let j = left; j <= right; j++) {
         outBlockList[j] = BLACK;
       }
