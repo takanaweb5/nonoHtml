@@ -1,9 +1,10 @@
 const WHITE = 2;
 const BLACK = 1;
 const UNKNOWN = 0;
-const DRAW_PER_FRAME = 2; // 1フレームで何セル分アニメーションさせるか
-const numCols = 30;
-const numRows = 20;
+const BLACK_CELL_RATE = 0.55;
+const DRAW_PER_FRAME = 10 // 1フレームで何セル分アニメーションさせるか
+const numCols = 50;
+const numRows = 25;
 const cellSize = 16;
 const fontSize = cellSize * 0.8;
 // 2次元配列の初期化
@@ -71,9 +72,7 @@ function generateRandomGrid() {
     for (let col = 1; col <= numCols; col++) {
       const cell = cells[row][col];
       const randomNumber = Math.random();
-      if (randomNumber < 0.25) {
-        cell.textContent = String(WHITE);
-      } else if (randomNumber < 0.90) {
+      if (randomNumber < BLACK_CELL_RATE) {
         cell.textContent = String(BLACK);
       } else {
         cell.textContent = String(UNKNOWN);
@@ -380,14 +379,12 @@ async function mainSolve() {
   }
 
   // gridの初期化
-  // await new Promise<void>(resolve => requestAnimationFrame(() => {
-  //   const oldMsg = document.getElementById('finish-msg');
-  //   if (oldMsg) oldMsg.remove();
-  //   clearGrid();
-  //   resolve();
-  // }));
-
-  await clearGrid();
+  const drawer = new AnimationDrawer(() => {
+    const oldMsg = document.getElementById('finish-msg');
+    if (oldMsg) oldMsg.remove();
+    clearGrid();
+  });
+  await drawer.draw();
 
   // solve用の2次元配列
   cellBoard = [];
@@ -395,17 +392,11 @@ async function mainSolve() {
 
   // solve開始
   const startTime = Date.now();
-  baseSolve(cellBoard, rowHints, colHints);
+  const result = await baseSolve(cellBoard, rowHints, colHints);
   console.log('baseSolve後cellBoard：');
   console.log(cellBoard);
-  const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
 
-  // cellBoardから確定したマスをセルに反映する
-  for (let y = 1; y <= numRows; y++) {
-    for (let x = 1; x <= numCols; x++) {
-      cells[y][x].textContent = String(cellBoard[y - 1][x - 1]);
-    }
-  }
+  const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
 
 
 
@@ -431,8 +422,12 @@ async function mainSolve() {
  * @param colHints - すべての列のヒントを格納した配列	例：[[1,2],[1,2,1],[3]]
  * @returns 確定件数、エラー時は-1
  */
-function baseSolve(cellBoard: number[][], rowHints: number[][], colHints: number[][]): number {
+async function baseSolve(cellBoard: number[][], rowHints: number[][], colHints: number[][]): Promise<number> {
   let result = 0;
+
+  const drawer = new AnimationDrawer((x, y, color) => {
+    cells[y + 1][x + 1].textContent = String(color);
+  }, DRAW_PER_FRAME);
 
   // 確定できるマスがある間は繰り返す
   let count = 99; // 確定したマスの数
@@ -442,15 +437,13 @@ function baseSolve(cellBoard: number[][], rowHints: number[][], colHints: number
     // 各行についてfixLineCellsを実行
     for (let y = 0; y < numRows; y++) {
       // 行データを取得
-      const lineCells: number[] = new Array(numCols);
-      for (let x = 0; x < numCols; x++) {
-        lineCells[x] = cellBoard[y][x];
-      }
-      const [cnt, updatedLineCells] = fixLineCells(rowHints[y], lineCells);
+      const lineCells: number[] = Array.from(colHints, (_, i) => cellBoard[y][i]);
+      const [cnt, updatedLineCells]: [number, number[]] = fixLineCells(rowHints[y], lineCells);
       if (cnt === -1) return -1;
       if (cnt > 0) {
         for (let x = 0; x < numCols; x++) {
           cellBoard[y][x] = updatedLineCells[x];
+          await drawer.draw(x, y, updatedLineCells[x]);
         }
         count += cnt;
       }
@@ -459,15 +452,13 @@ function baseSolve(cellBoard: number[][], rowHints: number[][], colHints: number
     // 各列についてfixLineCellsを実行
     for (let x = 0; x < numCols; x++) {
       // 列データを取得
-      const lineCells: number[] = new Array(numRows);
-      for (let y = 0; y < numRows; y++) {
-        lineCells[y] = cellBoard[y][x];
-      }
-      const [cnt, updatedLineCells] = fixLineCells(colHints[x], lineCells);
+      const lineCells: number[] = Array.from(rowHints, (_, i) => cellBoard[i][x]);
+      const [cnt, updatedLineCells]: [number, number[]] = fixLineCells(colHints[x], lineCells);
       if (cnt === -1) return -1;
       if (cnt > 0) {
         for (let y = 0; y < numRows; y++) {
           cellBoard[y][x] = updatedLineCells[y];
+          await drawer.draw(x, y, updatedLineCells[y]);
         }
         count += cnt;
       }
@@ -475,6 +466,8 @@ function baseSolve(cellBoard: number[][], rowHints: number[][], colHints: number
 
     result += count;
   }
+
+  await drawer.flush();
   return result;
 }
 
@@ -590,4 +583,52 @@ function fixLineCells(lineHints: number[], lineCells: number[]): [number, number
     }
   }
   return [count, result];
+}
+
+class AnimationDrawer {
+  // 1フレームあたりの描画回数（0の場合はアニメーションなし）
+  #drawPerFrame: number;
+  // 待機中の描画関数の引数用の配列
+  #pendingArgs: any[][] = [];
+  // 描画関数
+  #drawFunc: (...args: any[]) => void;
+
+  /**
+   * コンストラクタ
+   * @param {function} drawFunc 描画処理を行う関数
+   * @param {number} drawPerFrame 1フレームあたりの描画回数
+   *       （デフォルトは1、0の場合はアニメーションなし）
+   */
+  constructor(drawFunc: (...args: any[]) => void, drawPerFrame: number = 1) {
+    this.#drawFunc = drawFunc;
+    this.#drawPerFrame = drawPerFrame;
+  }
+
+  /**
+   * 描画命令をキューに追加
+   * @param {...any} args - 描画関数の引数
+   */
+  draw(...args: any[]): Promise<void> {
+    this.#pendingArgs.push(args);
+    if (this.#drawPerFrame > 0 && this.#pendingArgs.length >= this.#drawPerFrame) {
+      return this.flush();
+    }
+    return Promise.resolve();
+  }
+
+  /**
+   * キューにある描画命令を実行
+   * @returns {Promise<void>}
+   */
+  flush(): Promise<void> {
+    return new Promise(resolve => {
+      requestAnimationFrame(() => {
+        for (const arg of this.#pendingArgs) {
+          this.#drawFunc(...arg);
+        }
+        this.#pendingArgs.length = 0;
+        resolve();
+      });
+    });
+  }
 }
