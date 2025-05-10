@@ -1,7 +1,7 @@
 const WHITE = 2;
 const BLACK = 1;
 const UNKNOWN = 0;
-const BLACK_CELL_RATE = 0.54;
+const BLACK_CELL_RATE = 0.56;
 const DRAW_PER_FRAME = 50 // 1フレームで何セル分アニメーションさせるか
 const numCols = 50;
 const numRows = 30;
@@ -271,7 +271,6 @@ function makeHintsList(isRow: boolean): number[][] {
   }
   return result;
 }
-let cellBoard: number[][];
 
 async function mainSolve() {
   const rowHints = makeHintsList(true);
@@ -294,8 +293,7 @@ async function mainSolve() {
   await drawer.draw();
 
   // solve用の2次元配列
-  cellBoard = [];
-  cellBoard = Array.from({ length: numRows }, () => Array(numCols).fill(UNKNOWN));
+  const cellBoard: number[][] = Array.from({ length: numRows }, () => Array(numCols).fill(UNKNOWN));
 
   // solve開始
   const startTime = Date.now();
@@ -507,12 +505,12 @@ function fixLineCells(lineHints: number[], lineCells: number[]): [number, number
  * massBoardのいずれかのマスを白と仮定し矛盾すれば黒で確定
  * 上記以外の時は黒と仮定し矛盾すれば白で確定
  * 確定できるマスが0になるまで繰り返す
- * @param massBoard お絵かきロジックの状態（白,黒,未）を格納した2次元配列
+ * @param cellBoard お絵かきロジックの状態（白,黒,未）を格納した2次元配列
  * @param rowHints すべての行のヒントを格納した配列	例：[[1,2],[1,2,1],[3]]
  * @param colHints すべての列のヒントを格納した配列	例：[[1,2],[1,2,1],[3]]
  * @returns 確定件数、エラー時は-1
  */
-async function solve2D(massBoard: number[][], rowHints: number[][], colHints: number[][]): Promise<number> {
+async function solve2D(cellBoard: number[][], rowHints: number[][], colHints: number[][]): Promise<number> {
   const drawer = new AnimationDrawer((x, y, color) => {
     cells[y + 1][x + 1].textContent = String(color);
   }, 1);
@@ -520,20 +518,20 @@ async function solve2D(massBoard: number[][], rowHints: number[][], colHints: nu
   // 背理法を実行
   async function tryCell(x: number, y: number): Promise<number> {
     for (const value of [BLACK, WHITE]) {
-      const testMassBoard = massBoard.map(row => row.slice());
+      const testCellBoard = cellBoard.map(row => row.slice());
       // 白または黒 と仮定
-      testMassBoard[y][x] = value;
+      testCellBoard[y][x] = value;
       if (value === BLACK) await drawer.draw(x, y, value);
 
       // 高速化のため対象の列か行に確定マスがある場合のみ仮定を実行
-      if (fixLineCells(rowHints[y], testMassBoard[y])[0] > 0 ||
-        fixLineCells(colHints[x], testMassBoard.map(row => row[x]))[0] > 0) {
-        const cnt = await baseSolve(testMassBoard, rowHints, colHints, false);
+      if (fixLineCells(rowHints[y], testCellBoard[y])[0] > 0 ||
+        fixLineCells(colHints[x], testCellBoard.map(row => row[x]))[0] > 0) {
+        const cnt = await baseSolve(testCellBoard, rowHints, colHints, false);
         if (cnt === -1) {
           // 矛盾した場合、反対の色で確定
-          massBoard[y][x] = value === BLACK ? WHITE : BLACK;
-          await drawer.draw(x, y, massBoard[y][x]);
-          const cnt = await baseSolve(massBoard, rowHints, colHints);
+          cellBoard[y][x] = value === BLACK ? WHITE : BLACK;
+          await drawer.draw(x, y, cellBoard[y][x]);
+          const cnt = await baseSolve(cellBoard, rowHints, colHints);
           // 白でも黒でも矛盾したらエラー
           if (cnt === -1) return -1;
           // このマス＋確定できるだけ確定したマスの数
@@ -541,7 +539,7 @@ async function solve2D(massBoard: number[][], rowHints: number[][], colHints: nu
         }
       }
       // 元のマスに戻すアニメーション
-      await drawer.draw(x, y, massBoard[y][x]);
+      await drawer.draw(x, y, cellBoard[y][x]);
     }
     return 0;
   }
@@ -550,16 +548,16 @@ async function solve2D(massBoard: number[][], rowHints: number[][], colHints: nu
   function countUnknown(x: number, y: number) {
     let cnt = 0;
     for (let yy = 0; yy < rowHints.length; yy++) {
-      if (massBoard[yy][x] === UNKNOWN && yy !== y) cnt++;
+      if (cellBoard[yy][x] === UNKNOWN && yy !== y) cnt++;
     }
     for (let xx = 0; xx < colHints.length; xx++) {
-      if (massBoard[y][xx] === UNKNOWN && xx !== x) cnt++;
+      if (cellBoard[y][xx] === UNKNOWN && xx !== x) cnt++;
     }
     return cnt;
   }
 
   // 前回の未確定マス数を保存する配列(初期値は0)
-  let saveUnknownCnt = massBoard.map(row => row.map(_ => 0));
+  let saveUnknownCnt = cellBoard.map(row => row.map(_ => 0));
   let result = 0;
 
   // 確定できるマスがある間は繰り返す
@@ -568,7 +566,7 @@ async function solve2D(massBoard: number[][], rowHints: number[][], colHints: nu
     count = 0;
     for (let y = 0; y < rowHints.length; y++) {
       for (let x = 0; x < colHints.length; x++) {
-        if (massBoard[y][x] !== UNKNOWN) continue
+        if (cellBoard[y][x] !== UNKNOWN) continue
         const unknownCnt = countUnknown(x, y);
         // 高速化のため前回から未確定マス数が変わっていない場合はスキップ
         if (saveUnknownCnt[y][x] === unknownCnt) continue;
@@ -576,10 +574,10 @@ async function solve2D(massBoard: number[][], rowHints: number[][], colHints: nu
         // 隣接するマスが確定マスか、境界にあるマスのみを対象とする
         if (y === 0 || y === rowHints.length - 1 ||
           x === 0 || x === colHints.length - 1 ||
-          massBoard[y - 1][x] !== UNKNOWN ||
-          massBoard[y + 1][x] !== UNKNOWN ||
-          massBoard[y][x - 1] !== UNKNOWN ||
-          massBoard[y][x + 1] !== UNKNOWN) {
+          cellBoard[y - 1][x] !== UNKNOWN ||
+          cellBoard[y + 1][x] !== UNKNOWN ||
+          cellBoard[y][x - 1] !== UNKNOWN ||
+          cellBoard[y][x + 1] !== UNKNOWN) {
           const cnt = await tryCell(x, y);
           if (cnt === -1) return -1;
           if (cnt > 0) {
