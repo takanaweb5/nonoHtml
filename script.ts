@@ -1,10 +1,10 @@
 const WHITE = 2;
 const BLACK = 1;
 const UNKNOWN = 0;
-const BLACK_CELL_RATE = 0.55;
+const BLACK_CELL_RATE = 0.54;
 const DRAW_PER_FRAME = 50 // 1フレームで何セル分アニメーションさせるか
-const numCols = 80;
-const numRows = 35;
+const numCols = 50;
+const numRows = 30;
 const cellSize = 16;
 const fontSize = cellSize * 0.8;
 // 2次元配列の初期化
@@ -242,109 +242,18 @@ function shuffleCells(cellsArr: HTMLDivElement[]) {
   }
 }
 
-/**
- * パズルをアニメーションしながら自動で解く。
- * 行・列ごとにセルを塗りつぶし、全体が埋まるまで繰り返す。
- * @returns なし
- */
-async function solve(colHints: number[][], rowHints: number[][]): Promise<void> {
-  // 複数の描画を一気にまとめてアニメーションする関数
-  const args: { row: number; col: number; color: number }[] = [];
-  function animate(args: { row: number; col: number; color: number }[]) {
-    return new Promise<void>(resolve => {
-      requestAnimationFrame(() => {
-        args.forEach(arg => cells[arg.row][arg.col].textContent = String(arg.color));
-        resolve();
-      });
-    });
-  }
-
-  // 行と列の処理を共通化する関数
-  // 1行または1列単位の処理を関数化
-  async function processSingleRowOrCol(isRow: boolean, index: number) {
-    const unknownCells: HTMLDivElement[] = [];
-    const limit = isRow ? numCols : numRows;
-
-    // 未知セル収集
-    for (let j = 1; j <= limit; j++) {
-      const [row, col] = isRow ? [index, j] : [j, index];
-      if (!cellBoard[row][col]) {
-        unknownCells.push(cells[row][col]);
-      }
-    }
-
-    if (unknownCells.length === 0) return;
-
-    shuffleCells(unknownCells);
-    const fillCount = Math.floor(Math.random() * unknownCells.length) + 1;
-    // 0～fillCount-1の範囲でunknownCellsを(row, col)昇順にソート
-    const sorted = unknownCells.slice(0, fillCount).sort((a, b) => {
-      const aRow = Number(a.dataset.row);
-      const aCol = Number(a.dataset.col);
-      const bRow = Number(b.dataset.row);
-      const bCol = Number(b.dataset.col);
-      if (aRow !== bRow) return aRow - bRow;
-      return aCol - bCol;
-    });
-
-    for (let k = 0; k < fillCount; k++) {
-      const cell = sorted[k];
-      const [row, col] = isRow ? [index, Number(cell.dataset.col)] : [Number(cell.dataset.row), index];
-      const color = Math.random() < 0.5 ? 1 : 2;
-
-      if (cellBoard[row][col] === 0) {
-        cellBoard[row][col] = color;
-        args.push({ row, col, color });
-
-        // 数セルをまとめてアニメーションさせる(速度調整)
-        if (args.length >= DRAW_PER_FRAME) {
-          await animate(args);
-          args.length = 0;
-        }
-      }
-    }
-  }
-
-  async function processCells(isRow: boolean) {
-    const num = isRow ? numRows : numCols;
-    for (let i = 1; i <= num; i++) {
-      await processSingleRowOrCol(isRow, i);
-    }
-  }
-
-  while (!isPuzzleComplete()) {
-    await processCells(true);
-    await processCells(false);
-    // 残り処理
-    if (args.length > 0) {
-      await animate(args);
-    }
-  }
-}
-
-const title = document.querySelector('h1');
+const title = document.querySelector('#title');
 if (title) {
   title.addEventListener('click', handleTitleClick);
 }
+
+const msg = document.querySelector('#msg') as HTMLSpanElement;
 
 /**
  * 解析開始イベント
  */
 async function handleTitleClick() {
-
-
   mainSolve();
-
-  // const lineHints = [1,1,1];
-  // const blockList = [1,1,1,0,1];
-  // console.log('lineHints:');
-  // console.log(lineHints);
-  // console.log('blockList:');
-  // console.log(blockList);
-  // // const result = fixLineCells(lineHints, blockList);
-  //  const result = leftAlignBlocks(lineHints, blockList);
-  // console.log('result:');
-  // console.log(result);
 }
 
 /**
@@ -365,23 +274,21 @@ function makeHintsList(isRow: boolean): number[][] {
 let cellBoard: number[][];
 
 async function mainSolve() {
-  console.log('解析開始');
   const rowHints = makeHintsList(true);
   const colHints = makeHintsList(false);
 
   // 横と縦のヒントの合計が同じかどうかをチェック
   const rowSum = rowHints.reduce((a, b) => a + b.reduce((c, d) => c + d, 0), 0);
   const colSum = colHints.reduce((a, b) => a + b.reduce((c, d) => c + d, 0), 0);
-  console.log('縦のヒントの合計' + colSum);
   if (rowSum !== colSum) {
     window.alert(`横のヒントの合計${rowSum} ≠ 縦のヒントの合計${colSum} です`);
     return;
   }
+  console.log('ヒントの合計' + colSum);
 
   // gridの初期化
-  const drawer = new AnimationDrawer(() => {
-    const oldMsg = document.getElementById('finish-msg');
-    if (oldMsg) oldMsg.remove();
+  let drawer = new AnimationDrawer(() => {
+    msg.textContent = ``;
     clearGrid();
   });
   await drawer.draw();
@@ -393,27 +300,30 @@ async function mainSolve() {
   // solve開始
   const startTime = Date.now();
   const result = await baseSolve(cellBoard, rowHints, colHints);
-  console.log('baseSolve後cellBoard：');
-  console.log(cellBoard);
+  if (result === -1) {
+    window.alert('ヒントに誤りがあります');
+    return;
+  }
 
-
-  alert('solve2D開始');
-  const result2 = await solve2D(cellBoard, rowHints, colHints);
-  console.log('solve2D後cellBoard：');
-  console.log(cellBoard);
+  let result2 = 0;
+  if (result < numRows * numCols) {
+    drawer = new AnimationDrawer(() => {
+      msg.textContent = `２次元背理法開始`;
+    });
+    await drawer.draw();
+    result2 = await solve2D(cellBoard, rowHints, colHints);
+    if (result2 === -1) {
+      window.alert('ヒントに誤りがあります');
+      return;
+    }
+  }
 
   const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
 
-  // 新しいメッセージノードを作成
-  const msg = document.createElement('span');
-  msg.id = 'finish-msg';
-  msg.textContent = `　完成しました！経過時間: ${elapsedSec} 秒`;
-
-  // h1タグのテキスト直後に挿入
-  if (title && title.firstChild) {
-    title.insertBefore(msg, title.firstChild.nextSibling);
-  } else if (title) {
-    title.appendChild(msg);
+  if (result + result2 === numRows * numCols) {
+    msg.textContent += `　完成しました　経過時間: ${elapsedSec} 秒`;
+  } else {
+    msg.textContent += `　未完成　経過時間: ${elapsedSec} 秒`;
   }
 }
 
@@ -556,11 +466,11 @@ function leftAlignLineCells(lineHints: number[], lineCells: number[]): number[] 
  * いずれかの1行または1列について、ヒントと現在のブロック状態に基づいて、
  * 確定可能なマスを全て確定する
  * 引数:
- * @param lineHints 行または列のヒントを格納した配列
- * @param lineCells 現在のブロック状態（白,黒,未）を格納した配列
+ * @param lineHints 行または列のヒントを格納した配列 	例：[2,2]
+ * @param lineCells 現在のブロック状態（白,黒,未）を格納した配列  例：[未,未,白,未,未,未]
  * @returns Tuple
  * - number: 確定したマスの数、エラー時は-1
- * - number[]: 確定可能なマスを全て確定した後の配列
+ * - number[]: 確定可能なマスを全て確定した後の配列  例：[黒,黒,白,未,黒,未]
  */
 function fixLineCells(lineHints: number[], lineCells: number[]): [number, number[]] {
   // ブロックを左寄せする
