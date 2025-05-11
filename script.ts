@@ -1,12 +1,60 @@
 const WHITE = 2;
 const BLACK = 1;
 const UNKNOWN = 0;
-const BLACK_CELL_RATE = 0.56;
-const DRAW_PER_FRAME = 50 // 1フレームで何セル分アニメーションさせるか
-const numCols = 50;
-const numRows = 30;
 const cellSize = 16;
 const fontSize = cellSize * 0.8;
+
+// URLパラメータ取得
+const params = new URLSearchParams(window.location.search);
+let numCols = parseInt(params.get('width') || '') || 50;
+let numRows = parseInt(params.get('height') || '') || 30;
+let blackCellRate = parseFloat(params.get('blackRatio') || '') / 100 || 0.7;
+const drawPerFrame = parseInt(params.get('frames') || '') || 50;
+
+// 入力欄に値を反映
+(document.getElementById('width') as HTMLInputElement).value = numCols.toString();
+(document.getElementById('height') as HTMLInputElement).value = numRows.toString();
+(document.getElementById('blackRatio') as HTMLInputElement).value = Math.round(blackCellRate * 100).toString();
+(document.getElementById('frames') as HTMLInputElement).value = drawPerFrame.toString();
+
+const solve = document.querySelector('#solve');
+if (solve) {
+  solve.addEventListener('click', mainSolve);
+}
+const clear = document.querySelector('#clear');
+if (clear) {
+  clear.addEventListener('click', clearGrid);
+}
+const reload = document.querySelector('#reload');
+if (reload) {
+  reload.addEventListener('click', reloadAndCreate);
+}
+const makeHint = document.querySelector('#makeHint');
+if (makeHint) {
+  makeHint.addEventListener('click', makeHints);
+}
+const msg = document.querySelector('#msg') as HTMLSpanElement;
+
+/**
+ * 入力欄の値（幅・高さ・フレーム数・黒割合）を取得し、
+ * それらをURLパラメータとして現在のページを再読み込みする。
+ * 「再作成」ボタンのクリックイベントで呼ばれる。
+ */
+function reloadAndCreate() {
+  const w = (document.getElementById('width') as HTMLInputElement).value;
+  const h = (document.getElementById('height') as HTMLInputElement).value;
+  const f = (document.getElementById('frames') as HTMLInputElement).value;
+  const b = (document.getElementById('blackRatio') as HTMLInputElement).value;
+
+  const newParams = new URLSearchParams();
+  newParams.set('width', w);
+  newParams.set('height', h);
+  newParams.set('frames', f);
+  newParams.set('blackRatio', b);
+
+  window.location.href = `${window.location.pathname}?${newParams.toString()}`;
+}
+
 // 2次元配列の初期化
 const cells: HTMLDivElement[][] = Array.from({ length: numRows + 1 }, () =>
   new Array<HTMLDivElement>(numCols + 1));
@@ -67,12 +115,12 @@ function generateRandomGrid() {
     }
   }
 
-  // 値（色・textContent）設定
+  // blackCellRateに基づいてランダムにセルの値（色・textContent）を設定
   for (let row = 1; row <= numRows; row++) {
     for (let col = 1; col <= numCols; col++) {
       const cell = cells[row][col];
       const randomNumber = Math.random();
-      if (randomNumber < BLACK_CELL_RATE) {
+      if (randomNumber < blackCellRate) {
         cell.textContent = String(BLACK);
       } else {
         cell.textContent = String(UNKNOWN);
@@ -115,7 +163,7 @@ function generateRandomGrid() {
  */
 function toggleColor(event: MouseEvent) {
   const cell = event.target as HTMLDivElement;
-  const values = [WHITE, BLACK, UNKNOWN];
+  const values = [BLACK, WHITE, UNKNOWN];
   const idx = values.indexOf(Number(cell.textContent ?? ''));
   // 次の値（循環）
   cell.textContent = String(values[(idx + 1) % values.length]);
@@ -183,21 +231,7 @@ function makeHints() {
 
   console.log('[縦ヒント]' + '\n' + colHints.join('\n') + '\n');
   console.log('[横ヒント]' + '\n' + rowHints.join('\n') + '\n');
-
-  const clipText = '\t' + colHints.join('\t') + '\n' + rowHints.join('\n') + '\n';
-  navigator.clipboard.writeText(clipText)
 }
-
-/**
- * 行と列からセルの値を取得する
- * @param row - 行番号
- * @param col - 列番号
- * @returns セルの値
- */
-// function getCellValue(row: number, col: number): string {
-//   const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`) as HTMLDivElement;
-//   return cell.textContent || '0';
-// }
 
 // 初回のグリッド生成
 generateRandomGrid();
@@ -231,32 +265,6 @@ function isPuzzleComplete(): boolean {
 }
 
 /**
- * 配列内のセル要素をランダムな順序にシャッフルする。
- * @param cellsArr シャッフル対象のセル配列
- * @returns なし
- */
-function shuffleCells(cellsArr: HTMLDivElement[]) {
-  for (let i = 0; i < cellsArr.length - 1; i++) {
-    const j = i + Math.floor(Math.random() * (cellsArr.length - i));
-    [cellsArr[i], cellsArr[j]] = [cellsArr[j], cellsArr[i]];
-  }
-}
-
-const title = document.querySelector('#title');
-if (title) {
-  title.addEventListener('click', handleTitleClick);
-}
-
-const msg = document.querySelector('#msg') as HTMLSpanElement;
-
-/**
- * 解析開始イベント
- */
-async function handleTitleClick() {
-  mainSolve();
-}
-
-/**
  * 0列目または0行目からヒントの配列を取得する
  * @param isRow - trueなら行ヒント、falseなら列ヒント
  * @returns 例：[[1,3,1],[2,3],[3]]
@@ -285,40 +293,51 @@ async function mainSolve() {
   }
   console.log('ヒントの合計' + colSum);
 
-  // gridの初期化
+  // msgの初期化
   let drawer = new AnimationDrawer(() => {
     msg.textContent = ``;
-    clearGrid();
   });
   await drawer.draw();
 
   // solve用の2次元配列
-  const cellBoard: number[][] = Array.from({ length: numRows }, () => Array(numCols).fill(UNKNOWN));
+  const cellBoard: number[][] = Array.from({ length: numRows }).map((_, y) =>
+    Array.from({ length: numCols }).map((_, x) => {
+      const value = cells[y + 1][x + 1]?.textContent;
+      switch (value) {
+        case String(WHITE):
+          return WHITE;
+        case String(BLACK):
+          return BLACK;
+        default:
+          return UNKNOWN;
+      }
+    })
+  );
 
   // solve開始
   const startTime = Date.now();
   const result = await baseSolve(cellBoard, rowHints, colHints);
   if (result === -1) {
-    window.alert('ヒントに誤りがあります');
+    window.alert('ヒントに矛盾があります');
     return;
   }
 
   let result2 = 0;
-  if (result < numRows * numCols) {
+  if (!isPuzzleComplete()) {
     drawer = new AnimationDrawer(() => {
-      msg.textContent = `２次元背理法開始`;
+      msg.textContent = `２次元背理法実行`;
     });
     await drawer.draw();
     result2 = await solve2D(cellBoard, rowHints, colHints);
     if (result2 === -1) {
-      window.alert('ヒントに誤りがあります');
+      window.alert('ヒントに矛盾があります');
       return;
     }
   }
 
   const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
 
-  if (result + result2 === numRows * numCols) {
+  if (isPuzzleComplete()) {
     msg.textContent += `　完成しました　経過時間: ${elapsedSec} 秒`;
   } else {
     msg.textContent += `　未完成　経過時間: ${elapsedSec} 秒`;
@@ -337,11 +356,12 @@ async function mainSolve() {
 async function baseSolve(cellBoard: number[][], rowHints: number[][], colHints: number[][], isAnimation: boolean = true): Promise<number> {
   let result = 0;
 
+  const drawPerFrame = parseInt((document.getElementById('frames') as HTMLInputElement).value) || 50;
   let drawer: AnimationDrawer | null = null;
   if (isAnimation) {
     drawer = new AnimationDrawer((x, y, color) => {
       cells[y + 1][x + 1].textContent = String(color);
-    }, DRAW_PER_FRAME);
+    }, drawPerFrame);
   }
 
   // 確定できるマスがある間は繰り返す

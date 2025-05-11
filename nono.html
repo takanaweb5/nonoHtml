@@ -51,6 +51,31 @@
   }
 </script>
 <script src="script.ts" type="text/typescript"></script>
+<style>
+  .form-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+
+  .form-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  input[type="number"] {
+    width: 42px;
+  }
+
+  canvas {
+    border: 1px solid #000;
+    display: block;
+    margin-top: 10px;
+  }
+</style>
 
 <head>
   <meta charset="UTF-8">
@@ -60,8 +85,26 @@
 </head>
 
 <body>
-  <span id="title"><b>お絵かきロジック&nbsp;&nbsp;</b></span>
-  <span id="msg"></span>
+  <div class="form-row">
+    <button id="solve">解析実行</button>
+    <div class="form-item">
+      <label for="frames" title="アニメーション1フレーム当たりの描画セル数(描画速度に影響します)">フレーム:</label>
+      <input id="frames" type="number" step="1" min="0">
+    </div>
+    <button id="clear">クリア</button>
+    <button id="makeHint">ヒント作成</button>
+    <div class="form-item">
+      <label for="width">サイズ:</label>
+      <input id="width" type="number" step="1" min="1">×
+      <input id="height" type="number" step="1" min="1">
+    </div>
+    <div class="form-item">
+      <label for="blackRatio">黒比率:</label>
+      <input id="blackRatio" type="number" step="1" min="0" max="100">%
+    </div>
+    <button id="reload">再作成</button>
+    <span id="msg" style="color: red;"></span>
+  </div>
   <div class="grid"></div>
 </body>
 
