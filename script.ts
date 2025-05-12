@@ -8,7 +8,7 @@ const fontSize = cellSize * 0.8;
 const params = new URLSearchParams(window.location.search);
 let numCols = parseInt(params.get('width') || '') || 50;
 let numRows = parseInt(params.get('height') || '') || 30;
-let blackCellRate = parseFloat(params.get('blackRatio') || '') / 100 || 0.7;
+let blackCellRate = parseFloat(params.get('blackRatio') || '') / 100 || 0.60;
 const drawPerFrame = parseInt(params.get('frames') || '') || 50;
 
 // 入力欄に値を反映
@@ -207,12 +207,8 @@ function makeHints() {
    * @returns 生成されたヒント配列 例:['1,3,1','2,3']
    */
   function makeHintArray(colOrRow: string, length: number): string[] {
-    const result: string[] = [];
-    for (let i = 1; i <= length; i++) {
-      const hint = getOneLineHintString(colOrRow, i);
-      result.push(hint);
-    }
-    return result;
+    return Array.from({ length }, (_, i) =>
+      getOneLineHintString(colOrRow, i + 1));
   }
 
   //縦のヒントを作成
@@ -221,12 +217,10 @@ function makeHints() {
   const rowHints = makeHintArray('row', numRows);
 
   for (let i = 1; i <= numCols; i++) {
-    const cell = cells[0][i];
-    cell.innerText = colHints[i - 1];
+    cells[0][i].innerText = colHints[i - 1];
   }
   for (let i = 1; i <= numRows; i++) {
-    const cell = cells[i][0];
-    cell.innerText = rowHints[i - 1];
+    cells[i][0].innerText = rowHints[i - 1];
   }
 
   console.log('[縦ヒント]' + '\n' + colHints.join('\n') + '\n');
@@ -243,8 +237,7 @@ makeHints();
 async function clearGrid() {
   for (let row = 1; row <= numRows; row++) {
     for (let col = 1; col <= numCols; col++) {
-      const cell = cells[row][col];
-      cell.textContent = String(UNKNOWN);
+      cells[row][col].textContent = String(UNKNOWN);
     }
   }
 }
@@ -257,8 +250,7 @@ async function clearGrid() {
 function isPuzzleComplete(): boolean {
   for (let row = 1; row <= numRows; row++) {
     for (let col = 1; col <= numCols; col++) {
-      const cell = cells[row][col];
-      if (!cell || cell.textContent === String(UNKNOWN)) return false;
+      if (cells[row][col].textContent === String(UNKNOWN)) return false;
     }
   }
   return true;
@@ -302,7 +294,7 @@ async function mainSolve() {
   // solve用の2次元配列
   const cellBoard: number[][] = Array.from({ length: numRows }).map((_, y) =>
     Array.from({ length: numCols }).map((_, x) => {
-      const value = cells[y + 1][x + 1]?.textContent;
+      const value = cells[y + 1][x + 1].textContent;
       switch (value) {
         case String(WHITE):
           return WHITE;
@@ -626,7 +618,7 @@ async function solve2D(cellBoard: number[][], rowHints: number[][], colHints: nu
 class AnimationDrawer {
   // 1フレームあたりの描画回数（0の場合はアニメーションなし）
   #drawPerFrame: number;
-  // 待機中の描画関数の引数用の配列
+  // 待機中の描画関数の引数をキューイングする配列
   #pendingArgs: any[][] = [];
   // 描画関数
   #drawFunc: (...args: any[]) => void;
