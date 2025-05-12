@@ -77,3 +77,27 @@
 .Six-ten {
   background-color: rgb(200, 255, 255);
 }
+
+.form-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.form-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+input[type="number"] {
+  width: 42px;
+}
+
+canvas {
+  border: 1px solid #000;
+  display: block;
+  margin-top: 10px;
+}
