@@ -59,6 +59,172 @@ function reloadAndCreate() {
 const cells: HTMLDivElement[][] = Array.from({ length: numRows + 1 }, () =>
   new Array<HTMLDivElement>(numCols + 1));
 
+// 画像から取得したRGB値を保存する配列
+let gridRgb: [number, number, number][][] = [];
+
+// RGB→HSL変換関数
+function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h = 0, s = 0, l = (max + min) / 2;
+    if (max !== min) {
+        const d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        switch (max) {
+            case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+            case g: h = (b - r) / d + 2; break;
+            case b: h = (r - g) / d + 4; break;
+        }
+        h /= 6;
+    }
+    return [h * 360, s * 100, l * 100];
+}
+
+// 画像ドロップ領域のセットアップ
+const dropArea = document.getElementById('drop-area');
+if (dropArea) {
+    dropArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropArea.style.background = '#eef';
+    });
+    dropArea.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        dropArea.style.background = '';
+    });
+    dropArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropArea.style.background = '';
+        const file = e.dataTransfer?.files[0];
+        if (file && file.type.startsWith('image/')) {
+            // スライダー表示・ヒント非表示
+            const sliderArea = document.getElementById('lightness-slider-area');
+            if (sliderArea) sliderArea.style.display = '';
+            setHintDisplay(false);
+            loadImageToGrid(file);
+        }
+    });
+}
+
+// ヒント表示/非表示切り替え関数
+function setHintDisplay(show: boolean) {
+    // 横ヒント（1列目）
+    for (let row = 0; row <= numRows; row++) {
+        const cell = cells[row][0];
+        if (cell) (cell as HTMLElement).style.display = show ? '' : 'none';
+    }
+    // 縦ヒント（1行目）
+    for (let col = 0; col <= numCols; col++) {
+        const cell = cells[0][col];
+        if (cell) (cell as HTMLElement).style.display = show ? '' : 'none';
+    }
+}
+
+
+// ヒント作成ボタンでスライダー非表示・ヒント表示
+const makeHintBtn = document.getElementById('makeHint');
+if (makeHintBtn) {
+    makeHintBtn.addEventListener('click', () => {
+        const sliderArea = document.getElementById('lightness-slider-area');
+        if (sliderArea) sliderArea.style.display = 'none';
+        setHintDisplay(true);
+    });
+}
+
+// 貼り付けイベントの追加
+// ドキュメント全体でペーストを監視
+// 画像があればloadImageToGridに渡し、スライダー表示・ヒント非表示
+
+document.addEventListener('paste', (e: ClipboardEvent) => {
+    if (!e.clipboardData) return;
+    for (let i = 0; i < e.clipboardData.items.length; i++) {
+        const item = e.clipboardData.items[i];
+        if (item.type.startsWith('image/')) {
+            const file = item.getAsFile();
+            if (file) {
+                // スライダー表示・ヒント非表示
+                const sliderArea = document.getElementById('lightness-slider-area');
+                if (sliderArea) sliderArea.style.display = '';
+                setHintDisplay(false);
+                loadImageToGrid(file);
+                e.preventDefault();
+                break;
+            }
+        }
+    }
+});
+
+// 画像→グリッド＆RGB保存
+function loadImageToGrid(file: File) {
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        img.src = e.target?.result as string;
+    };
+    img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = numCols;
+        canvas.height = numRows;
+        const ctx = canvas.getContext('2d')!;
+        ctx.drawImage(img, 0, 0, numCols, numRows);
+        const imgData = ctx.getImageData(0, 0, numCols, numRows).data;
+        gridRgb = [];
+        for (let row = 1; row <= numRows; row++) {
+            gridRgb[row] = [];
+            for (let col = 1; col <= numCols; col++) {
+                const idx = ((row - 1) * numCols + (col - 1)) * 4;
+                const r = imgData[idx];
+                const g = imgData[idx + 1];
+                const b = imgData[idx + 2];
+                gridRgb[row][col] = [r, g, b];
+            }
+        }
+        updateGridByLightness();
+    };
+    reader.readAsDataURL(file);
+}
+
+// スライダーのイベントとグリッド更新
+const lightnessSlider = document.getElementById('lightness') as HTMLInputElement;
+if (lightnessSlider) {
+    lightnessSlider.addEventListener('input', () => {
+        document.getElementById('lightness-value')!.textContent = lightnessSlider.value;
+        if (gridRgb.length > 0) updateGridByLightness();
+        updateBlackRatio();
+    });
+}
+
+// 黒セル比率を計算してblackRatio欄に反映
+function updateBlackRatio() {
+    let blackCount = 0;
+    for (let row = 1; row <= numRows; row++) {
+        for (let col = 1; col <= numCols; col++) {
+            if (cells[row][col].textContent === String(BLACK)) {
+                blackCount++;
+            }
+        }
+    }
+    const total = numRows * numCols;
+    const blackRatio = Math.round((blackCount / total) * 100);
+    const blackRatioInput = document.getElementById('blackRatio') as HTMLInputElement;
+    if (blackRatioInput) {
+        blackRatioInput.value = blackRatio.toString();
+    }
+}
+
+
+// スライダー値でグリッド再描画
+function updateGridByLightness() {
+    const threshold = Number((document.getElementById('lightness') as HTMLInputElement).value);
+    for (let row = 1; row <= numRows; row++) {
+        for (let col = 1; col <= numCols; col++) {
+            const [r, g, b] = gridRgb[row][col];
+            const [, , l] = rgbToHsl(r, g, b);
+            cells[row][col].textContent = String(l < threshold ? BLACK : WHITE);
+        }
+    }
+    makeHints();
+}
+
 /**
  * グリッドを初期化し、セルやヒントの表示・イベント設定を行う。
  */
