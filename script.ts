@@ -59,170 +59,267 @@ function reloadAndCreate() {
 const cells: HTMLDivElement[][] = Array.from({ length: numRows + 1 }, () =>
   new Array<HTMLDivElement>(numCols + 1));
 
-// 画像から取得したRGB値を保存する配列
-let gridRgb: [number, number, number][][] = [];
+// 画像から取得したグレースケール値を保存する配列
+let gridGray: number[][] = [];
 
 // RGB→HSL変換関数
 function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
-    r /= 255; g /= 255; b /= 255;
-    const max = Math.max(r, g, b), min = Math.min(r, g, b);
-    let h = 0, s = 0, l = (max + min) / 2;
-    if (max !== min) {
-        const d = max - min;
-        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-        switch (max) {
-            case r: h = (g - b) / d + (g < b ? 6 : 0); break;
-            case g: h = (b - r) / d + 2; break;
-            case b: h = (r - g) / d + 4; break;
-        }
-        h /= 6;
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h = 0, s = 0, l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+      case g: h = (b - r) / d + 2; break;
+      case b: h = (r - g) / d + 4; break;
     }
-    return [h * 360, s * 100, l * 100];
+    h /= 6;
+  }
+  return [h * 360, s * 100, l * 100];
 }
 
 // 画像ドロップ領域のセットアップ
 const dropArea = document.getElementById('drop-area');
 if (dropArea) {
-    dropArea.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        dropArea.style.background = '#eef';
-    });
-    dropArea.addEventListener('dragleave', (e) => {
-        e.preventDefault();
-        dropArea.style.background = '';
-    });
-    dropArea.addEventListener('drop', (e) => {
-        e.preventDefault();
-        dropArea.style.background = '';
-        const file = e.dataTransfer?.files[0];
-        if (file && file.type.startsWith('image/')) {
-            // スライダー表示・ヒント非表示
-            const sliderArea = document.getElementById('lightness-slider-area');
-            if (sliderArea) sliderArea.style.display = '';
-            setHintDisplay(false);
-            loadImageToGrid(file);
-        }
-    });
+  dropArea.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropArea.style.background = '#eef';
+  });
+  dropArea.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    dropArea.style.background = '';
+  });
+  dropArea.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropArea.style.background = '';
+    const file = e.dataTransfer?.files[0];
+    if (file && file.type.startsWith('image/')) {
+      // スライダー表示・ヒント非表示
+      const sliderArea = document.getElementById('lightness-slider-area');
+      if (sliderArea) sliderArea.style.display = '';
+      setHintDisplay(false);
+      loadImageToGrid(file);
+    }
+  });
 }
 
 // ヒント表示/非表示切り替え関数
 function setHintDisplay(show: boolean) {
-    // 横ヒント（1列目）
-    for (let row = 0; row <= numRows; row++) {
-        const cell = cells[row][0];
-        if (cell) (cell as HTMLElement).style.display = show ? '' : 'none';
+  function setStyle(cell: HTMLElement, show: boolean) {
+    if (show) {
+      cell.style.width = '';
+      cell.style.height = '';
+      cell.style.overflow = '';
+      cell.style.border = '';
+      cell.style.padding = '';
+      cell.style.visibility = '';
+    } else {
+      cell.style.width = '0';
+      cell.style.height = '0';
+      cell.style.overflow = 'hidden';
+      cell.style.border = 'none';
+      cell.style.padding = '0';
+      cell.style.visibility = 'hidden';
     }
-    // 縦ヒント（1行目）
-    for (let col = 0; col <= numCols; col++) {
-        const cell = cells[0][col];
-        if (cell) (cell as HTMLElement).style.display = show ? '' : 'none';
-    }
-}
+  }
 
+  // 横ヒント（1列目）
+  for (let row = 0; row <= numRows; row++) {
+    if (cells[row][0]) setStyle(cells[row][0], show);
+  }
+  // 縦ヒント（1行目）
+  for (let col = 0; col <= numCols; col++) {
+    if (cells[0][col]) setStyle(cells[0][col], show);
+  }
+}
 
 // ヒント作成ボタンでスライダー非表示・ヒント表示
 const makeHintBtn = document.getElementById('makeHint');
 if (makeHintBtn) {
-    makeHintBtn.addEventListener('click', () => {
-        const sliderArea = document.getElementById('lightness-slider-area');
-        if (sliderArea) sliderArea.style.display = 'none';
-        setHintDisplay(true);
-    });
+  makeHintBtn.addEventListener('click', () => {
+    const sliderArea = document.getElementById('lightness-slider-area');
+    if (sliderArea) sliderArea.style.display = 'none';
+    setHintDisplay(true);
+  });
 }
 
 // 貼り付けイベントの追加
 // ドキュメント全体でペーストを監視
 // 画像があればloadImageToGridに渡し、スライダー表示・ヒント非表示
-
 document.addEventListener('paste', (e: ClipboardEvent) => {
-    if (!e.clipboardData) return;
-    for (let i = 0; i < e.clipboardData.items.length; i++) {
-        const item = e.clipboardData.items[i];
-        if (item.type.startsWith('image/')) {
-            const file = item.getAsFile();
-            if (file) {
-                // スライダー表示・ヒント非表示
-                const sliderArea = document.getElementById('lightness-slider-area');
-                if (sliderArea) sliderArea.style.display = '';
-                setHintDisplay(false);
-                loadImageToGrid(file);
-                e.preventDefault();
-                break;
-            }
-        }
+  if (!e.clipboardData) return;
+  for (let i = 0; i < e.clipboardData.items.length; i++) {
+    const item = e.clipboardData.items[i];
+    if (item.type.startsWith('image/')) {
+      const file = item.getAsFile();
+      if (file) {
+        // スライダー表示・ヒント非表示
+        const sliderArea = document.getElementById('lightness-slider-area');
+        if (sliderArea) sliderArea.style.display = '';
+        loadImageToGrid(file);
+        setHintDisplay(false);
+        e.preventDefault();
+        break;
+      }
     }
+  }
 });
+
+// 大津の二値化法でしきい値を計算
+function otsuThreshold(grayValues: number[]): number {
+  const hist = new Array(256).fill(0);
+  grayValues.forEach(v => hist[Math.round(v)]++);
+  const total = grayValues.length;
+  let sum = 0;
+  for (let t = 0; t < 256; t++) sum += t * hist[t];
+  let sumB = 0, wB = 0, wF = 0, varMax = 0, threshold = 0;
+  for (let t = 0; t < 256; t++) {
+    wB += hist[t];
+    if (wB === 0) continue;
+    wF = total - wB;
+    if (wF === 0) break;
+    sumB += t * hist[t];
+    const mB = sumB / wB;
+    const mF = (sum - sumB) / wF;
+    const varBetween = wB * wF * (mB - mF) * (mB - mF);
+    if (varBetween > varMax) {
+      varMax = varBetween;
+      threshold = t;
+    }
+  }
+  return threshold;
+}
 
 // 画像→グリッド＆RGB保存
 function loadImageToGrid(file: File) {
-    const img = new Image();
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        img.src = e.target?.result as string;
-    };
-    img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = numCols;
-        canvas.height = numRows;
-        const ctx = canvas.getContext('2d')!;
-        ctx.drawImage(img, 0, 0, numCols, numRows);
-        const imgData = ctx.getImageData(0, 0, numCols, numRows).data;
-        gridRgb = [];
-        for (let row = 1; row <= numRows; row++) {
-            gridRgb[row] = [];
-            for (let col = 1; col <= numCols; col++) {
-                const idx = ((row - 1) * numCols + (col - 1)) * 4;
-                const r = imgData[idx];
-                const g = imgData[idx + 1];
-                const b = imgData[idx + 2];
-                gridRgb[row][col] = [r, g, b];
-            }
-        }
-        updateGridByLightness();
-    };
-    reader.readAsDataURL(file);
+  const img = new Image();
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    img.src = e.target?.result as string;
+  };
+  img.onload = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = numCols;
+    canvas.height = numRows;
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(img, 0, 0, numCols, numRows);
+    const imgData = ctx.getImageData(0, 0, numCols, numRows).data;
+    gridGray = [];
+    const grayList: number[] = [];
+    for (let row = 1; row <= numRows; row++) {
+      gridGray[row] = [];
+      for (let col = 1; col <= numCols; col++) {
+        const idx = ((row - 1) * numCols + (col - 1)) * 4;
+        const r = imgData[idx];
+        const g = imgData[idx + 1];
+        const b = imgData[idx + 2];
+        const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+        gridGray[row][col] = gray;
+        grayList.push(gray);
+      }
+    }
+    // 大津法でしきい値決定
+    const otsu = otsuThreshold(grayList);
+    const lightnessSlider = document.getElementById('lightness') as HTMLInputElement;
+    if (lightnessSlider) {
+      lightnessSlider.value = otsu.toString();
+    }
+    updateGridByLightness();
+  };
+  reader.readAsDataURL(file);
 }
 
 // スライダーのイベントとグリッド更新
 const lightnessSlider = document.getElementById('lightness') as HTMLInputElement;
+const decBtn = document.getElementById('lightness-decrement');
+const incBtn = document.getElementById('lightness-increment');
 if (lightnessSlider) {
-    lightnessSlider.addEventListener('input', () => {
-        document.getElementById('lightness-value')!.textContent = lightnessSlider.value;
-        if (gridRgb.length > 0) updateGridByLightness();
-        updateBlackRatio();
-    });
+  lightnessSlider.addEventListener('input', () => {
+    if (gridGray.length > 0) updateGridByLightness();
+    updateBlackRatio();
+  });
 }
+function setupSpinButtonHold(button: HTMLElement, callback: () => void) {
+  let timer: number | null = null;
+  let delay = 400; // 初回遅延
+  let interval = 60; // 連打間隔
+  const start = () => {
+    callback(); // まず1回
+    timer = window.setTimeout(function repeat() {
+      callback();
+      timer = window.setTimeout(repeat, interval);
+    }, delay);
+  };
+  const stop = () => {
+    if (timer !== null) {
+      clearTimeout(timer);
+      timer = null;
+    }
+  };
+  button.addEventListener('mousedown', start);
+  button.addEventListener('touchstart', start);
+  button.addEventListener('mouseup', stop);
+  button.addEventListener('mouseleave', stop);
+  button.addEventListener('touchend', stop);
+  button.addEventListener('touchcancel', stop);
+}
+
+if (decBtn && lightnessSlider) {
+  const dec = () => {
+    let val = Number(lightnessSlider.value);
+    if (val > 0) {
+      lightnessSlider.value = String(val - 1);
+      lightnessSlider.dispatchEvent(new Event('input'));
+    }
+  };
+  decBtn.addEventListener('click', dec);
+  setupSpinButtonHold(decBtn, dec);
+}
+if (incBtn && lightnessSlider) {
+  const inc = () => {
+    let val = Number(lightnessSlider.value);
+    if (val < 255) {
+      lightnessSlider.value = String(val + 1);
+      lightnessSlider.dispatchEvent(new Event('input'));
+    }
+  };
+  incBtn.addEventListener('click', inc);
+  setupSpinButtonHold(incBtn, inc);
+}
+
 
 // 黒セル比率を計算してblackRatio欄に反映
 function updateBlackRatio() {
-    let blackCount = 0;
-    for (let row = 1; row <= numRows; row++) {
-        for (let col = 1; col <= numCols; col++) {
-            if (cells[row][col].textContent === String(BLACK)) {
-                blackCount++;
-            }
-        }
+  let blackCount = 0;
+  for (let row = 1; row <= numRows; row++) {
+    for (let col = 1; col <= numCols; col++) {
+      if (cells[row][col].textContent === String(BLACK)) {
+        blackCount++;
+      }
     }
-    const total = numRows * numCols;
-    const blackRatio = Math.round((blackCount / total) * 100);
-    const blackRatioInput = document.getElementById('blackRatio') as HTMLInputElement;
-    if (blackRatioInput) {
-        blackRatioInput.value = blackRatio.toString();
-    }
+  }
+  const total = numRows * numCols;
+  const blackRatio = Math.round((blackCount / total) * 100);
+  const blackRatioInput = document.getElementById('blackRatio') as HTMLInputElement;
+  if (blackRatioInput) {
+    blackRatioInput.value = blackRatio.toString();
+  }
 }
 
 
 // スライダー値でグリッド再描画
 function updateGridByLightness() {
-    const threshold = Number((document.getElementById('lightness') as HTMLInputElement).value);
-    for (let row = 1; row <= numRows; row++) {
-        for (let col = 1; col <= numCols; col++) {
-            const [r, g, b] = gridRgb[row][col];
-            const [, , l] = rgbToHsl(r, g, b);
-            cells[row][col].textContent = String(l < threshold ? BLACK : WHITE);
-        }
+  const threshold = Number((document.getElementById('lightness') as HTMLInputElement).value);
+  for (let row = 1; row <= numRows; row++) {
+    for (let col = 1; col <= numCols; col++) {
+      const gray = gridGray[row][col];
+      cells[row][col].textContent = String(gray < threshold ? BLACK : UNKNOWN);
     }
-    makeHints();
+  }
+  // makeHints();
+  updateBlackRatio();
 }
 
 /**
@@ -505,9 +602,9 @@ async function mainSolve() {
 /**
  * お絵かきロジックを背理法で解く
  * すべての行と列に対して背理法を適用して、確定できるマスが0になるまで繰り返す
- * @param cellBoard - お絵かきロジックの状態（白,黒,未）を格納した2次元配列
- * @param rowHints - すべての行のヒントを格納した配列	例：[[1,2],[1,2,1],[3]]
- * @param colHints - すべての列のヒントを格納した配列	例：[[1,2],[1,2,1],[3]]
+ * @param cellBoard お絵かきロジックの状態（白,黒,未）を格納した2次元配列
+ * @param rowHints すべての行のヒントを格納した配列	例：[[1,2],[1,2,1],[3]]
+ * @param colHints すべての列のヒントを格納した配列	例：[[1,2],[1,2,1],[3]]
  * @param isAnimation - アニメーションさせるかどうか
  * @returns 確定件数、エラー時は-1
  */
