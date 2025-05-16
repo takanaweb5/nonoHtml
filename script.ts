@@ -9,7 +9,7 @@ const params = new URLSearchParams(window.location.search);
 let numCols = parseInt(params.get('width') || '') || 50;
 let numRows = parseInt(params.get('height') || '') || 30;
 let blackCellRate = parseFloat(params.get('blackRatio') || '') / 100 || 0.60;
-const drawPerFrame = parseInt(params.get('frames') || '') || 50;
+let drawPerFrame = parseInt(params.get('frames') || '50');
 
 // 入力欄に値を反映
 (document.getElementById('width') as HTMLInputElement).value = numCols.toString();
@@ -18,21 +18,13 @@ const drawPerFrame = parseInt(params.get('frames') || '') || 50;
 (document.getElementById('frames') as HTMLInputElement).value = drawPerFrame.toString();
 
 const solve = document.querySelector('#solve');
-if (solve) {
-  solve.addEventListener('click', mainSolve);
-}
+if (solve) solve.addEventListener('click', mainSolve);
 const clear = document.querySelector('#clear');
-if (clear) {
-  clear.addEventListener('click', clearGrid);
-}
+if (clear) clear.addEventListener('click', clearGrid);
 const reload = document.querySelector('#reload');
-if (reload) {
-  reload.addEventListener('click', reloadAndCreate);
-}
+if (reload) reload.addEventListener('click', reloadAndCreate);
 const makeHint = document.querySelector('#makeHint');
-if (makeHint) {
-  makeHint.addEventListener('click', makeHints);
-}
+if (makeHint) makeHint.addEventListener('click', makeHints);
 const msg = document.querySelector('#msg') as HTMLSpanElement;
 
 /**
@@ -62,38 +54,19 @@ const cells: HTMLDivElement[][] = Array.from({ length: numRows + 1 }, () =>
 // 画像から取得したグレースケール値を保存する配列
 let gridGray: number[][] = [];
 
-// RGB→HSL変換関数
-function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
-  r /= 255; g /= 255; b /= 255;
-  const max = Math.max(r, g, b), min = Math.min(r, g, b);
-  let h = 0, s = 0, l = (max + min) / 2;
-  if (max !== min) {
-    const d = max - min;
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-    switch (max) {
-      case r: h = (g - b) / d + (g < b ? 6 : 0); break;
-      case g: h = (b - r) / d + 2; break;
-      case b: h = (r - g) / d + 4; break;
-    }
-    h /= 6;
+// グリッドへのドラッグ＆ドロップのセットアップ
+const grid = document.querySelector('.grid');
+if (grid) {
+  // 背景色を設定する関数
+  function setDragStyle(e: DragEvent, color: string) {
+    e.preventDefault();
+    (grid as HTMLElement).style.backgroundColor = color;
   }
-  return [h * 360, s * 100, l * 100];
-}
 
-// 画像ドロップ領域のセットアップ
-const dropArea = document.getElementById('drop-area');
-if (dropArea) {
-  dropArea.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    dropArea.style.background = '#eef';
-  });
-  dropArea.addEventListener('dragleave', (e) => {
-    e.preventDefault();
-    dropArea.style.background = '';
-  });
-  dropArea.addEventListener('drop', (e) => {
-    e.preventDefault();
-    dropArea.style.background = '';
+  // ドロップ時の処理
+  function handleDrop(e: DragEvent) {
+    setDragStyle(e, '');
+
     const file = e.dataTransfer?.files[0];
     if (file && file.type.startsWith('image/')) {
       // スライダー表示・ヒント非表示
@@ -102,7 +75,12 @@ if (dropArea) {
       setHintDisplay(false);
       loadImageToGrid(file);
     }
-  });
+  }
+
+  // イベントリスナーを追加
+  grid.addEventListener('dragover', ((e: DragEvent) => setDragStyle(e, '#eef')) as EventListener);
+  grid.addEventListener('dragleave', ((e: DragEvent) => setDragStyle(e, '')) as EventListener);
+  grid.addEventListener('drop', handleDrop as EventListener);
 }
 
 // ヒント表示/非表示切り替え関数
@@ -266,29 +244,26 @@ function setupSpinButtonHold(button: HTMLElement, callback: () => void) {
   button.addEventListener('touchcancel', stop);
 }
 
-if (decBtn && lightnessSlider) {
-  const dec = () => {
-    let val = Number(lightnessSlider.value);
-    if (val > 0) {
-      lightnessSlider.value = String(val - 1);
-      lightnessSlider.dispatchEvent(new Event('input'));
-    }
-  };
-  decBtn.addEventListener('click', dec);
-  setupSpinButtonHold(decBtn, dec);
-}
-if (incBtn && lightnessSlider) {
-  const inc = () => {
-    let val = Number(lightnessSlider.value);
-    if (val < 255) {
-      lightnessSlider.value = String(val + 1);
-      lightnessSlider.dispatchEvent(new Event('input'));
-    }
-  };
-  incBtn.addEventListener('click', inc);
-  setupSpinButtonHold(incBtn, inc);
+// スライダーの値を更新する関数
+const updateSliderValue = (step: number) => {
+  const currentValue = Number(lightnessSlider.value);
+  const newValue = currentValue + step;
+
+  // 0-255の範囲内に収める
+  if (0 <= newValue && newValue <= 255) {
+    lightnessSlider.value = String(newValue);
+    lightnessSlider.dispatchEvent(new Event('input'));
+  }
 }
 
+if (decBtn) {
+  decBtn.addEventListener('click', () => updateSliderValue(-1));
+  setupSpinButtonHold(decBtn, () => updateSliderValue(-1));
+}
+if (incBtn) {
+  incBtn.addEventListener('click', () => updateSliderValue(1));
+  setupSpinButtonHold(incBtn, () => updateSliderValue(1));
+}
 
 // 黒セル比率を計算してblackRatio欄に反映
 function updateBlackRatio() {
@@ -308,7 +283,6 @@ function updateBlackRatio() {
   }
 }
 
-
 // スライダー値でグリッド再描画
 function updateGridByLightness() {
   const threshold = Number((document.getElementById('lightness') as HTMLInputElement).value);
@@ -318,7 +292,6 @@ function updateGridByLightness() {
       cells[row][col].textContent = String(gray < threshold ? BLACK : UNKNOWN);
     }
   }
-  // makeHints();
   updateBlackRatio();
 }
 
@@ -520,7 +493,7 @@ function isPuzzleComplete(): boolean {
 }
 
 /**
- * 0列目または0行目からヒントの配列を取得する
+ * 指定された列または行のヒントを取得する
  * @param isRow - trueなら行ヒント、falseなら列ヒント
  * @returns 例：[[1,3,1],[2,3],[3]]
  */
@@ -611,7 +584,7 @@ async function mainSolve() {
 async function baseSolve(cellBoard: number[][], rowHints: number[][], colHints: number[][], isAnimation: boolean = true): Promise<number> {
   let result = 0;
 
-  const drawPerFrame = parseInt((document.getElementById('frames') as HTMLInputElement).value) || 50;
+  const drawPerFrame = parseInt((document.getElementById('frames') as HTMLInputElement).value) || 0;
   let drawer: AnimationDrawer | null = null;
   if (isAnimation) {
     drawer = new AnimationDrawer((x, y, color) => {
@@ -902,10 +875,14 @@ class AnimationDrawer {
    * @param {...any} args - 描画関数の引数
    */
   draw(...args: any[]): Promise<void> {
-    this.#pendingArgs.push(args);
-    if (this.#drawPerFrame > 0 && this.#pendingArgs.length >= this.#drawPerFrame) {
-      return this.flush();
+    if (this.#drawPerFrame > 0) {
+      this.#pendingArgs.push(args);
+      if (this.#pendingArgs.length >= this.#drawPerFrame) {
+        return this.flush();
+      }
+      return Promise.resolve();
     }
+    this.#drawFunc(...args);
     return Promise.resolve();
   }
 
@@ -914,6 +891,7 @@ class AnimationDrawer {
    * @returns {Promise<void>}
    */
   flush(): Promise<void> {
+    if (this.#pendingArgs.length === 0) return Promise.resolve();
     return new Promise(resolve => {
       requestAnimationFrame(() => {
         for (const arg of this.#pendingArgs) {
