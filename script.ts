@@ -875,14 +875,15 @@ class AnimationDrawer {
    * @param {...any} args - 描画関数の引数
    */
   draw(...args: any[]): Promise<void> {
-    if (this.#drawPerFrame > 0) {
-      this.#pendingArgs.push(args);
-      if (this.#pendingArgs.length >= this.#drawPerFrame) {
-        return this.flush();
-      }
+    // drawPerFrameが0の場合はアニメーションなし
+    if (this.#drawPerFrame === 0) {
+      this.#drawFunc(...args);
       return Promise.resolve();
     }
-    this.#drawFunc(...args);
+    this.#pendingArgs.push(args);
+    if (this.#pendingArgs.length >= this.#drawPerFrame) {
+      return this.flush();
+    }
     return Promise.resolve();
   }
 
