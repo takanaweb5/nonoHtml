@@ -455,9 +455,9 @@ function getOneLineHintString(colOrRow: string, num: number): string {
   const cells = document.querySelectorAll(`[data-${colOrRow}="${num}"]`);
   let blackCounter = 0;
   const blackCounterArray: number[] = [];
-  for (const cell of cells as NodeListOf<HTMLDivElement>) {
-    const value = cell.textContent;
-    if (value === String(BLACK)) {
+
+  for (let i = 1; i < cells.length; i++) {
+    if (cells[i].textContent === String(BLACK)) {
       blackCounter++;
     } else {
       if (blackCounter > 0) {
@@ -469,7 +469,7 @@ function getOneLineHintString(colOrRow: string, num: number): string {
   if (blackCounter > 0) {
     blackCounterArray.push(blackCounter);
   }
-  return blackCounterArray.length > 0 ? blackCounterArray.join(',') : String(UNKNOWN);
+  return blackCounterArray.length > 0 ? blackCounterArray.join(',') : '0';
 }
 
 /**
@@ -487,16 +487,17 @@ function makeHints() {
       getOneLineHintString(colOrRow, i + 1));
   }
 
-  //縦のヒントを作成
+  // 縦のヒントを作成
   const colHints = makeHintArray('col', numCols);
-  //横のヒントを作成
+  // 横のヒントを作成
   const rowHints = makeHintArray('row', numRows);
 
+  // ヒントをセット
   for (let i = 1; i <= numCols; i++) {
-    cells[0][i].innerText = colHints[i - 1];
+    cells[0][i].textContent = colHints[i - 1];
   }
   for (let i = 1; i <= numRows; i++) {
-    cells[i][0].innerText = rowHints[i - 1];
+    cells[i][0].textContent = rowHints[i - 1];
   }
 
   console.log('[縦ヒント]' + '\n' + colHints.join('\n') + '\n');
