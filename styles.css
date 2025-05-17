@@ -101,3 +101,34 @@ canvas {
   display: block;
   margin-top: 10px;
 }
+
+/* ドラッグ中のテキスト */
+#drag-text {
+  position: absolute;
+  display: none; /* デフォルトでは非表示 */
+  justify-content: center;
+  align-items: center;
+  z-index: 10;
+  pointer-events: none;
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  font-size: 24px;
+  text-shadow: 0 0 5px black;
+}
+
+#drag-text.dragging {
+  display: flex; /* ドラッグ中のみ表示 */
+}
+
+#drag-text::before {
+  content: 'ここに画像をドロップ';
+}
+
+/* 編集モードと通常モードの表示制御 */
+body.edit-mode .normal-only {
+  display: none;
+}
+
+body:not(.edit-mode) .edit-only {
+  display: none;
+}

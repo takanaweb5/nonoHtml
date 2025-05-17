@@ -61,12 +61,12 @@
 
 <body>
   <div class="form-row">
-    <button id="solve">解析実行</button>
-    <div class="form-item">
+    <button id="solve" class="normal-only">解析実行</button>
+    <div class="form-item normal-only">
       <label for="frames" title="アニメーション1フレーム当たりの描画セル数(描画速度に影響します)">フレーム:</label>
       <input id="frames" type="number" step="1" min="0">
     </div>
-    <button id="clear">クリア</button>
+    <button id="clear" class="normal-only">クリア</button>
     <button id="makeHint">ヒント作成</button>
     <div class="form-item">
       <label for="width">サイズ:</label>
@@ -77,9 +77,9 @@
       <label for="blackRatio">黒比率:</label>
       <input id="blackRatio" type="number" step="1" min="0" max="100">%
     </div>
-    <button id="reload">再作成</button>
-    <span id="msg" style="color: red;"></span>
-    <div class="form-item" id="lightness-slider-area" style="display:none;">
+    <button id="reload" class="normal-only">再作成</button>
+    <span id="msg" class="normal-only" style="color: red;"></span>
+    <div class="form-item edit-only" id="lightness-slider-area" style="display:none;">
       <label for="lightness">明るさしきい値(0～255):</label>
       <div style="display: flex; align-items: center; gap: 4px;">
         <button type="button" id="lightness-decrement">−</button>

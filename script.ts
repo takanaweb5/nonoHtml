@@ -48,69 +48,94 @@ function reloadAndCreate() {
 }
 
 // 2次元配列の初期化
-const cells: HTMLDivElement[][] = Array.from({ length: numRows + 1 }, () =>
-  new Array<HTMLDivElement>(numCols + 1));
+let cells: HTMLDivElement[][];
 
 // 画像から取得したグレースケール値を保存する配列
 let gridGray: number[][] = [];
 
 // グリッドへのドラッグ＆ドロップのセットアップ
-const grid = document.querySelector('.grid');
+const grid = document.querySelector('.grid') as HTMLElement;
 if (grid) {
-  // 背景色を設定する関数
-  function setDragStyle(e: DragEvent, color: string) {
+  // ドラッグ中のスタイルとテキストを設定する関数
+  function setDragStyle(e: DragEvent, isDragging: boolean) {
     e.preventDefault();
-    (grid as HTMLElement).style.backgroundColor = color;
+
+    // ドラッグ中のテキスト表示
+    const dragText = document.getElementById('drag-text') || document.createElement('div');
+    dragText.id = 'drag-text';
+
+    // グリッドの位置とサイズを取得
+    const gridRect = grid.getBoundingClientRect();
+
+    // グリッドに合わせて位置とサイズを設定
+    dragText.style.top = `${gridRect.top + window.scrollY}px`;
+    dragText.style.left = `${gridRect.left + window.scrollX}px`;
+    dragText.style.width = `${gridRect.width}px`;
+    dragText.style.height = `${gridRect.height}px`;
+
+    if (isDragging) {
+      // ドラッグ中
+      dragText.classList.add('dragging');
+      grid.appendChild(dragText);
+    } else {
+      // ドラッグ終了
+      dragText.classList.remove('dragging');
+      grid.removeChild(dragText);
+    }
   }
 
   // ドロップ時の処理
   function handleDrop(e: DragEvent) {
-    setDragStyle(e, '');
+    setDragStyle(e, false);
 
     const file = e.dataTransfer?.files[0];
     if (file && file.type.startsWith('image/')) {
       // スライダー表示・ヒント非表示
       const sliderArea = document.getElementById('lightness-slider-area');
       if (sliderArea) sliderArea.style.display = '';
-      setHintDisplay(false);
       loadImageToGrid(file);
+      setEditMode(true);
     }
   }
 
   // イベントリスナーを追加
-  grid.addEventListener('dragover', ((e: DragEvent) => setDragStyle(e, '#eef')) as EventListener);
-  grid.addEventListener('dragleave', ((e: DragEvent) => setDragStyle(e, '')) as EventListener);
+  grid.addEventListener('dragover', ((e: DragEvent) => setDragStyle(e, true)) as EventListener);
+  grid.addEventListener('dragleave', ((e: DragEvent) => setDragStyle(e, false)) as EventListener);
   grid.addEventListener('drop', handleDrop as EventListener);
 }
 
-// ヒント表示/非表示切り替え関数
-function setHintDisplay(show: boolean) {
-  function setStyle(cell: HTMLElement, show: boolean) {
-    if (show) {
-      cell.style.width = '';
-      cell.style.height = '';
-      cell.style.overflow = '';
-      cell.style.border = '';
-      cell.style.padding = '';
-      cell.style.visibility = '';
-    } else {
+/**
+ * 編集モード切り替え関数
+ * @param isEdit - true: 編集モード, false: 通常モード
+ */
+function setEditMode(isEdit: boolean) {
+  function setStyle(cell: HTMLElement) {
+    if (isEdit) {
       cell.style.width = '0';
       cell.style.height = '0';
       cell.style.overflow = 'hidden';
       cell.style.border = 'none';
       cell.style.padding = '0';
       cell.style.visibility = 'hidden';
+    } else {
+      cell.style.width = '';
+      cell.style.height = '';
+      cell.style.overflow = '';
+      cell.style.border = '';
+      cell.style.padding = '';
+      cell.style.visibility = '';
     }
   }
 
   // 横ヒント（1列目）
   for (let row = 0; row <= numRows; row++) {
-    if (cells[row][0]) setStyle(cells[row][0], show);
+    if (cells[row][0]) setStyle(cells[row][0]);
   }
   // 縦ヒント（1行目）
   for (let col = 0; col <= numCols; col++) {
-    if (cells[0][col]) setStyle(cells[0][col], show);
+    if (cells[0][col]) setStyle(cells[0][col]);
   }
+  document.body.classList.toggle('edit-mode', isEdit);
 }
 
 // ヒント作成ボタンでスライダー非表示・ヒント表示
@@ -119,7 +144,7 @@ if (makeHintBtn) {
   makeHintBtn.addEventListener('click', () => {
     const sliderArea = document.getElementById('lightness-slider-area');
     if (sliderArea) sliderArea.style.display = 'none';
-    setHintDisplay(true);
+    setEditMode(false);
   });
 }
 
@@ -137,7 +162,7 @@ document.addEventListener('paste', (e: ClipboardEvent) => {
         const sliderArea = document.getElementById('lightness-slider-area');
         if (sliderArea) sliderArea.style.display = '';
         loadImageToGrid(file);
-        setHintDisplay(false);
+        setEditMode(true);
         e.preventDefault();
         break;
       }
@@ -172,6 +197,10 @@ function otsuThreshold(grayValues: number[]): number {
 
 // 画像→グリッド＆RGB保存
 function loadImageToGrid(file: File) {
+  numCols = Number((document.getElementById('width') as HTMLInputElement).value);
+  numRows = Number((document.getElementById('height') as HTMLInputElement).value);
+  initializeGrid(numCols, numRows);
+
   const img = new Image();
   const reader = new FileReader();
   reader.onload = (e) => {
@@ -295,16 +324,32 @@ function updateGridByLightness() {
   updateBlackRatio();
 }
 
+let gridObserver: MutationObserver | null = null;
 /**
  * グリッドを初期化し、セルやヒントの表示・イベント設定を行う。
+ * @param numCols グリッドの列数
+ * @param numRows グリッドの行数
  */
-function generateRandomGrid() {
+function initializeGrid(numCols: number, numRows: number): void {
+  function toggleColor(event: MouseEvent) {
+    const cell = event.target as HTMLDivElement;
+    const values = [BLACK, WHITE, UNKNOWN];
+    const idx = values.indexOf(Number(cell.textContent ?? ''));
+    // 次の値（循環）
+    cell.textContent = String(values[(idx + 1) % values.length]);
+  }
+
+  cells = Array.from({ length: numRows + 1 }, () =>
+    new Array<HTMLDivElement>(numCols + 1));
+
+  // CSS変数の設定
   document.documentElement.style.setProperty('--cellSize', `${cellSize}px`);
   document.documentElement.style.setProperty('--numCols', `${numCols}`);
   document.documentElement.style.setProperty('--numRows', `${numRows}`);
   document.documentElement.style.setProperty('--fontSize', `${fontSize}px`);
 
   const grid = document.querySelector('.grid') as HTMLDivElement;
+  gridObserver?.disconnect();
   grid.innerHTML = '';
 
   // セル生成・配置
@@ -326,7 +371,7 @@ function generateRandomGrid() {
   }
 
   // textContentチェンジイベント設定
-  const observer = new MutationObserver((mutations) => {
+  gridObserver = new MutationObserver((mutations) => {
     for (const mutation of mutations) {
       const cell = mutation.target as HTMLDivElement;
       cell.classList.remove('White', 'Black', 'Unknown');
@@ -342,28 +387,13 @@ function generateRandomGrid() {
   for (let row = 1; row <= numRows; row++) {
     for (let col = 1; col <= numCols; col++) {
       const cell = cells[row][col];
-      cell.addEventListener('click', toggleColor);
-      observer.observe(cell, {
+      gridObserver.observe(cell, {
         characterData: false,
         childList: true,
         subtree: false
       });
     }
   }
-
-  // blackCellRateに基づいてランダムにセルの値（色・textContent）を設定
-  for (let row = 1; row <= numRows; row++) {
-    for (let col = 1; col <= numCols; col++) {
-      const cell = cells[row][col];
-      const randomNumber = Math.random();
-      if (randomNumber < blackCellRate) {
-        cell.textContent = String(BLACK);
-      } else {
-        cell.textContent = String(UNKNOWN);
-      }
-    }
-  }
-
   // 縦ヒント設定
   for (let col = 1; col <= numCols; col++) {
     const cell = cells[0][col];
@@ -380,7 +410,6 @@ function generateRandomGrid() {
       cell.classList.add('Six-ten');
     }
   }
-
   // 右端の線
   for (let row = 0; row <= numRows; row++) {
     const cell = cells[row][numCols];
@@ -394,15 +423,26 @@ function generateRandomGrid() {
 }
 
 /**
- * セルの色を切り替える関数
- * @param event - イベントオブジェクト
+ * グリッドをランダムに初期化する
  */
-function toggleColor(event: MouseEvent) {
-  const cell = event.target as HTMLDivElement;
-  const values = [BLACK, WHITE, UNKNOWN];
-  const idx = values.indexOf(Number(cell.textContent ?? ''));
-  // 次の値（循環）
-  cell.textContent = String(values[(idx + 1) % values.length]);
+function generateRandomGrid() {
+  const cols = Number((document.getElementById('width') as HTMLInputElement).value);
+  const rows = Number((document.getElementById('height') as HTMLInputElement).value);
+
+  initializeGrid(cols, rows);
+
+  // blackCellRateに基づいてランダムにセルの値（色・textContent）を設定
+  for (let row = 1; row <= numRows; row++) {
+    for (let col = 1; col <= numCols; col++) {
+      const cell = cells[row][col];
+      const randomNumber = Math.random();
+      if (randomNumber < blackCellRate) {
+        cell.textContent = String(BLACK);
+      } else {
+        cell.textContent = String(UNKNOWN);
+      }
+    }
+  }
 }
 
 /**
@@ -462,10 +502,6 @@ function makeHints() {
   console.log('[縦ヒント]' + '\n' + colHints.join('\n') + '\n');
   console.log('[横ヒント]' + '\n' + rowHints.join('\n') + '\n');
 }
-
-// 初回のグリッド生成
-generateRandomGrid();
-makeHints();
 
 /**
  * すべてのセルをクリアする。
@@ -838,6 +874,13 @@ async function solve2D(cellBoard: number[][], rowHints: number[][], colHints: nu
   }
   return result;
 }
+
+function main() {
+  // 初回のグリッド生成
+  generateRandomGrid();
+  makeHints();
+}
+main();
 
 //////////////////////////////////////////////////////////////////////////
 /**
