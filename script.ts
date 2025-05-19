@@ -17,15 +17,15 @@ let drawPerFrame = parseInt(params.get('frames') || '50');
 (document.getElementById('blackRatio') as HTMLInputElement).value = Math.round(blackCellRate * 100).toString();
 (document.getElementById('frames') as HTMLInputElement).value = drawPerFrame.toString();
 
-const solve = document.querySelector('#solve');
+const solve = document.getElementById('solve');
 if (solve) solve.addEventListener('click', mainSolve);
-const clear = document.querySelector('#clear');
+const clear = document.getElementById('clear');
 if (clear) clear.addEventListener('click', clearGrid);
-const reload = document.querySelector('#reload');
+const reload = document.getElementById('reload');
 if (reload) reload.addEventListener('click', reloadAndCreate);
-const makeHint = document.querySelector('#makeHint');
+const makeHint = document.getElementById('makeHint');
 if (makeHint) makeHint.addEventListener('click', makeHints);
-const msg = document.querySelector('#msg') as HTMLSpanElement;
+const msg = document.getElementById('msg') as HTMLSpanElement;
 
 /**
  * 入力欄の値（幅・高さ・フレーム数・黒割合）を取得し、
@@ -90,9 +90,6 @@ if (grid) {
 
     const file = e.dataTransfer?.files[0];
     if (file && file.type.startsWith('image/')) {
-      // スライダー表示・ヒント非表示
-      const sliderArea = document.getElementById('lightness-slider-area');
-      if (sliderArea) sliderArea.style.display = '';
       loadImageToGrid(file);
       setEditMode(true);
     }
@@ -109,43 +106,7 @@ if (grid) {
  * @param isEdit - true: 編集モード, false: 通常モード
  */
 function setEditMode(isEdit: boolean) {
-  function setStyle(cell: HTMLElement) {
-    if (isEdit) {
-      cell.style.width = '0';
-      cell.style.height = '0';
-      cell.style.overflow = 'hidden';
-      cell.style.border = 'none';
-      cell.style.padding = '0';
-      cell.style.visibility = 'hidden';
-    } else {
-      cell.style.width = '';
-      cell.style.height = '';
-      cell.style.overflow = '';
-      cell.style.border = '';
-      cell.style.padding = '';
-      cell.style.visibility = '';
-    }
-  }
-
-  // 横ヒント（1列目）
-  for (let row = 0; row <= numRows; row++) {
-    if (cells[row][0]) setStyle(cells[row][0]);
-  }
-  // 縦ヒント（1行目）
-  for (let col = 0; col <= numCols; col++) {
-    if (cells[0][col]) setStyle(cells[0][col]);
-  }
   document.body.classList.toggle('edit-mode', isEdit);
-}
-
-// ヒント作成ボタンでスライダー非表示・ヒント表示
-const makeHintBtn = document.getElementById('makeHint');
-if (makeHintBtn) {
-  makeHintBtn.addEventListener('click', () => {
-    const sliderArea = document.getElementById('lightness-slider-area');
-    if (sliderArea) sliderArea.style.display = 'none';
-    setEditMode(false);
-  });
 }
 
 // 貼り付けイベントの追加
@@ -158,9 +119,6 @@ document.addEventListener('paste', (e: ClipboardEvent) => {
     if (item.type.startsWith('image/')) {
       const file = item.getAsFile();
       if (file) {
-        // スライダー表示・ヒント非表示
-        const sliderArea = document.getElementById('lightness-slider-area');
-        if (sliderArea) sliderArea.style.display = '';
         loadImageToGrid(file);
         setEditMode(true);
         e.preventDefault();
@@ -447,17 +405,19 @@ function generateRandomGrid() {
 
 /**
  * 指定された列または行のヒント文字列を生成する関数
- * @param colOrRow - 'col' または 'row' の文字列
+ * @param isRow - true または false
  * @param num - 列または行の番号
  * @returns 生成されたヒント文字列 例:'1,3,1'
  */
-function getOneLineHintString(colOrRow: string, num: number): string {
-  const cells = document.querySelectorAll(`[data-${colOrRow}="${num}"]`);
+function getOneLineHintString(isRow: boolean, num: number): string {
   let blackCounter = 0;
   const blackCounterArray: number[] = [];
 
-  for (let i = 1; i < cells.length; i++) {
-    if (cells[i].textContent === String(BLACK)) {
+  const limit = isRow ? numRows : numCols;
+  for (let i = 1; i <= limit; i++) {
+    const [row, col] = isRow ? [i, num] : [num, i];
+    const cell = cells[row][col];
+    if (cell.textContent === String(BLACK)) {
       blackCounter++;
     } else {
       if (blackCounter > 0) {
@@ -478,19 +438,21 @@ function getOneLineHintString(colOrRow: string, num: number): string {
 function makeHints() {
   /**
    * ヒント配列を生成する関数
-   * @param colOrRow - 'col' または 'row' の文字列
+   * @param isRow - true または false
    * @param length - 行数 または 列数
    * @returns 生成されたヒント配列 例:['1,3,1','2,3']
    */
-  function makeHintArray(colOrRow: string, length: number): string[] {
+  function makeHintArray(isRow: boolean, length: number): string[] {
     return Array.from({ length }, (_, i) =>
-      getOneLineHintString(colOrRow, i + 1));
+      getOneLineHintString(isRow, i + 1));
   }
+  msg.textContent = '';
+  setEditMode(false);
 
   // 縦のヒントを作成
-  const colHints = makeHintArray('col', numCols);
+  const colHints = makeHintArray(true, numCols);
   // 横のヒントを作成
-  const rowHints = makeHintArray('row', numRows);
+  const rowHints = makeHintArray(false, numRows);
 
   // ヒントをセット
   for (let i = 1; i <= numCols; i++) {
@@ -508,6 +470,7 @@ function makeHints() {
  * すべてのセルをクリアする。
  */
 async function clearGrid() {
+  msg.textContent = '';
   for (let row = 1; row <= numRows; row++) {
     for (let col = 1; col <= numCols; col++) {
       cells[row][col].textContent = String(UNKNOWN);
@@ -537,8 +500,8 @@ function isPuzzleComplete(): boolean {
 function makeHintsList(isRow: boolean): number[][] {
   const result: number[][] = [];
   const limit = isRow ? numRows : numCols;
-  for (let index = 1; index <= limit; index++) {
-    const [row, col] = isRow ? [index, 0] : [0, index];
+  for (let i = 1; i <= limit; i++) {
+    const [row, col] = isRow ? [i, 0] : [0, i];
     const cell = cells[row][col].textContent || '';
     result.push(cell.split(',').map(Number));
   }
@@ -546,6 +509,7 @@ function makeHintsList(isRow: boolean): number[][] {
 }
 
 async function mainSolve() {
+  msg.textContent = '';
   const rowHints = makeHintsList(true);
   const colHints = makeHintsList(false);
 
@@ -603,9 +567,9 @@ async function mainSolve() {
   const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
 
   if (isPuzzleComplete()) {
-    msg.textContent += `　完成しました　経過時間: ${elapsedSec} 秒`;
+    msg.textContent += `　完成しました　時間: ${elapsedSec} 秒`;
   } else {
-    msg.textContent += `　未完成　経過時間: ${elapsedSec} 秒`;
+    msg.textContent += `　未完成　時間: ${elapsedSec} 秒`;
   }
 }
 

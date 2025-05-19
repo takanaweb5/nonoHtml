@@ -124,11 +124,21 @@ canvas {
   content: 'ここに画像をドロップ';
 }
 
-/* 編集モードと通常モードの表示制御 */
 body.edit-mode .normal-only {
   display: none;
 }
 
 body:not(.edit-mode) .edit-only {
   display: none;
+}
+
+body.edit-mode .grid > :first-child,
+body.edit-mode .v-hint,
+body.edit-mode .h-hint {
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  border: none !important;
+  padding: 0 !important;
+  visibility: hidden !important;
 }
