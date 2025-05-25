@@ -27,35 +27,19 @@ const makeHint = document.getElementById('makeHint');
 if (makeHint) makeHint.addEventListener('click', makeHints);
 const msg = document.getElementById('msg') as HTMLSpanElement;
 
-/**
- * 入力欄の値（幅・高さ・フレーム数・黒割合）を取得し、
- * それらをURLパラメータとして現在のページを再読み込みする。
- * 「再作成」ボタンのクリックイベントで呼ばれる。
- */
-function reloadAndCreate() {
-  const w = (document.getElementById('width') as HTMLInputElement).value;
-  const h = (document.getElementById('height') as HTMLInputElement).value;
-  const f = (document.getElementById('frames') as HTMLInputElement).value;
-  const b = (document.getElementById('blackRatio') as HTMLInputElement).value;
-
-  const newParams = new URLSearchParams();
-  newParams.set('width', w);
-  newParams.set('height', h);
-  newParams.set('frames', f);
-  newParams.set('blackRatio', b);
-
-  window.location.href = `${window.location.pathname}?${newParams.toString()}`;
-}
-
 // 2次元配列の初期化
 let cells: HTMLDivElement[][];
-
 // 画像から取得したグレースケール値を保存する配列
 let gridGray: number[][] = [];
 
-// グリッドへのドラッグ＆ドロップのセットアップ
-const grid = document.querySelector('.grid') as HTMLElement;
-if (grid) {
+/**
+ * イベントを初期化する
+ */
+function initializeEvents() {
+  // グリッドへのドラッグ＆ドロップのセットアップ
+  const grid = document.querySelector('.grid') as HTMLElement;
+  if (!grid) return;
+
   // ドラッグ中のスタイルとテキストを設定する関数
   function setDragStyle(e: DragEvent, isDragging: boolean) {
     e.preventDefault();
@@ -80,7 +64,9 @@ if (grid) {
     } else {
       // ドラッグ終了
       dragText.classList.remove('dragging');
-      grid.removeChild(dragText);
+      if (grid.contains(dragText)) {
+        grid.removeChild(dragText);
+      }
     }
   }
 
@@ -99,6 +85,106 @@ if (grid) {
   grid.addEventListener('dragover', ((e: DragEvent) => setDragStyle(e, true)) as EventListener);
   grid.addEventListener('dragleave', ((e: DragEvent) => setDragStyle(e, false)) as EventListener);
   grid.addEventListener('drop', handleDrop as EventListener);
+
+  // スライダーのイベントとグリッド更新
+  const lightnessSlider = document.getElementById('lightness') as HTMLInputElement;
+  if (lightnessSlider) {
+    lightnessSlider.addEventListener('input', () => {
+      if (gridGray.length > 0) updateGridByLightness();
+      updateBlackRatio();
+    });
+
+    // スライダーの値を更新する関数
+    const updateSliderValue = (step: number) => {
+      const currentValue = Number(lightnessSlider.value);
+      const newValue = currentValue + step;
+
+      // 0-255の範囲内に収める
+      if (0 <= newValue && newValue <= 255) {
+        lightnessSlider.value = String(newValue);
+        lightnessSlider.dispatchEvent(new Event('input'));
+      }
+    };
+
+    // スピンボタンのホールドイベントを設定
+    function setupSpinButtonHold(button: HTMLElement, callback: () => void) {
+      let timer: number | null = null;
+      let delay = 400; // 初回遅延
+      let interval = 60; // 連打間隔
+      const start = () => {
+        callback(); // まず1回
+        timer = window.setTimeout(function repeat() {
+          callback();
+          timer = window.setTimeout(repeat, interval);
+        }, delay);
+      };
+      const stop = () => {
+        if (timer !== null) {
+          clearTimeout(timer);
+          timer = null;
+        }
+      };
+      button.addEventListener('mousedown', start);
+      button.addEventListener('touchstart', start);
+      button.addEventListener('mouseup', stop);
+      button.addEventListener('mouseleave', stop);
+      button.addEventListener('touchend', stop);
+      button.addEventListener('touchcancel', stop);
+    }
+
+    // スライダーの増減ボタンの設定
+    const decBtn = document.getElementById('lightness-decrement');
+    const incBtn = document.getElementById('lightness-increment');
+    if (decBtn) {
+      decBtn.addEventListener('click', () => updateSliderValue(-1));
+      setupSpinButtonHold(decBtn, () => updateSliderValue(-1));
+    }
+    if (incBtn) {
+      incBtn.addEventListener('click', () => updateSliderValue(1));
+      setupSpinButtonHold(incBtn, () => updateSliderValue(1));
+    }
+  }
+
+  /**
+   * 貼り付けイベントの追加
+   * ドキュメント全体でペーストを監視
+   * 画像があればloadImageToGridに渡し、スライダー表示・ヒント非表示
+   */
+  document.addEventListener('paste', (e: ClipboardEvent) => {
+    if (!e.clipboardData) return;
+    for (let i = 0; i < e.clipboardData.items.length; i++) {
+      const item = e.clipboardData.items[i];
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) {
+          loadImageToGrid(file);
+          setEditMode(true);
+          e.preventDefault();
+          break;
+        }
+      }
+    }
+  });
+}
+
+/**
+ * 入力欄の値（幅・高さ・フレーム数・黒割合）を取得し、
+ * それらをURLパラメータとして現在のページを再読み込みする。
+ * 「再作成」ボタンのクリックイベントで呼ばれる。
+ */
+function reloadAndCreate() {
+  const w = (document.getElementById('width') as HTMLInputElement).value;
+  const h = (document.getElementById('height') as HTMLInputElement).value;
+  const f = (document.getElementById('frames') as HTMLInputElement).value;
+  const b = (document.getElementById('blackRatio') as HTMLInputElement).value;
+
+  const newParams = new URLSearchParams();
+  newParams.set('width', w);
+  newParams.set('height', h);
+  newParams.set('frames', f);
+  newParams.set('blackRatio', b);
+
+  window.location.href = `${window.location.pathname}?${newParams.toString()}`;
 }
 
 /**
@@ -108,26 +194,6 @@ if (grid) {
 function setEditMode(isEdit: boolean) {
   document.body.classList.toggle('edit-mode', isEdit);
 }
-
-// 貼り付けイベントの追加
-// ドキュメント全体でペーストを監視
-// 画像があればloadImageToGridに渡し、スライダー表示・ヒント非表示
-document.addEventListener('paste', (e: ClipboardEvent) => {
-  if (!e.clipboardData) return;
-  for (let i = 0; i < e.clipboardData.items.length; i++) {
-    const item = e.clipboardData.items[i];
-    if (item.type.startsWith('image/')) {
-      const file = item.getAsFile();
-      if (file) {
-        loadImageToGrid(file);
-        setEditMode(true);
-        e.preventDefault();
-        break;
-      }
-    }
-  }
-});
-
 // 大津の二値化法でしきい値を計算
 function otsuThreshold(grayValues: number[]): number {
   const hist = new Array(256).fill(0);
@@ -153,7 +219,10 @@ function otsuThreshold(grayValues: number[]): number {
   return threshold;
 }
 
-// 画像→グリッド＆RGB保存
+/**
+ * 画像→グリッド＆RGB保存
+ * @param file - 画像ファイル
+ */
 function loadImageToGrid(file: File) {
   numCols = Number((document.getElementById('width') as HTMLInputElement).value);
   numRows = Number((document.getElementById('height') as HTMLInputElement).value);
@@ -196,63 +265,9 @@ function loadImageToGrid(file: File) {
   reader.readAsDataURL(file);
 }
 
-// スライダーのイベントとグリッド更新
-const lightnessSlider = document.getElementById('lightness') as HTMLInputElement;
-const decBtn = document.getElementById('lightness-decrement');
-const incBtn = document.getElementById('lightness-increment');
-if (lightnessSlider) {
-  lightnessSlider.addEventListener('input', () => {
-    if (gridGray.length > 0) updateGridByLightness();
-    updateBlackRatio();
-  });
-}
-function setupSpinButtonHold(button: HTMLElement, callback: () => void) {
-  let timer: number | null = null;
-  let delay = 400; // 初回遅延
-  let interval = 60; // 連打間隔
-  const start = () => {
-    callback(); // まず1回
-    timer = window.setTimeout(function repeat() {
-      callback();
-      timer = window.setTimeout(repeat, interval);
-    }, delay);
-  };
-  const stop = () => {
-    if (timer !== null) {
-      clearTimeout(timer);
-      timer = null;
-    }
-  };
-  button.addEventListener('mousedown', start);
-  button.addEventListener('touchstart', start);
-  button.addEventListener('mouseup', stop);
-  button.addEventListener('mouseleave', stop);
-  button.addEventListener('touchend', stop);
-  button.addEventListener('touchcancel', stop);
-}
-
-// スライダーの値を更新する関数
-const updateSliderValue = (step: number) => {
-  const currentValue = Number(lightnessSlider.value);
-  const newValue = currentValue + step;
-
-  // 0-255の範囲内に収める
-  if (0 <= newValue && newValue <= 255) {
-    lightnessSlider.value = String(newValue);
-    lightnessSlider.dispatchEvent(new Event('input'));
-  }
-}
-
-if (decBtn) {
-  decBtn.addEventListener('click', () => updateSliderValue(-1));
-  setupSpinButtonHold(decBtn, () => updateSliderValue(-1));
-}
-if (incBtn) {
-  incBtn.addEventListener('click', () => updateSliderValue(1));
-  setupSpinButtonHold(incBtn, () => updateSliderValue(1));
-}
-
-// 黒セル比率を計算してblackRatio欄に反映
+/**
+ * 黒セル比率を計算してblackRatio欄に反映
+ */
 function updateBlackRatio() {
   let blackCount = 0;
   for (let row = 1; row <= numRows; row++) {
@@ -270,7 +285,9 @@ function updateBlackRatio() {
   }
 }
 
-// スライダー値でグリッド再描画
+/**
+ * スライダー値に基づいてグリッドを再描画
+ */
 function updateGridByLightness() {
   const threshold = Number((document.getElementById('lightness') as HTMLInputElement).value);
   for (let row = 1; row <= numRows; row++) {
@@ -508,6 +525,13 @@ function makeHintsList(isRow: boolean): number[][] {
   return result;
 }
 
+
+//////////////////////////////////////////////////////////////////////////
+// solve関連
+//////////////////////////////////////////////////////////////////////////
+/**
+ * お絵かきロジックを解くメイン関数
+ */
 async function mainSolve() {
   msg.textContent = '';
   const rowHints = makeHintsList(true);
@@ -841,6 +865,8 @@ async function solve2D(cellBoard: number[][], rowHints: number[][], colHints: nu
 }
 
 function main() {
+  // イベントの初期化
+  initializeEvents();
   // 初回のグリッド生成
   generateRandomGrid();
   makeHints();
