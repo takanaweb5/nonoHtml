@@ -26,11 +26,77 @@ if (reload) reload.addEventListener('click', reloadAndCreate);
 const makeHint = document.getElementById('makeHint');
 if (makeHint) makeHint.addEventListener('click', makeHints);
 const msg = document.getElementById('msg') as HTMLSpanElement;
+if (makeHint) makeHint.addEventListener('click', makeHints);
+const edit = document.getElementById('edit');
+if (edit) edit.addEventListener('click', () => setEditMode(true));
+const save = document.getElementById('save');
+if (save) save.addEventListener('click', saveHint);
 
 // 2次元配列の初期化
 let cells: HTMLDivElement[][];
 // 画像から取得したグレースケール値を保存する配列
 let gridGray: number[][] = [];
+
+/**
+ * .hintファイルを読み込み、グリッドを更新する
+ * @param file - .hintファイル
+ */
+async function loadHints(file: File) {
+  try {
+    // ファイルをテキストとして読み込む
+    const content = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target?.result as string);
+      reader.onerror = (error) => reject(error);
+      reader.readAsText(file, 'UTF-8');
+    });
+
+    // ファイルを[ColHints]と[RowHints]のセクションに分割
+    const colSection = content.match(/\[ColHints\]([\s\S]*?)(?=\[RowHints\]|$)/i);
+    const rowSection = content.match(/\[RowHints\]([\s\S]*)/i);
+
+    if (!colSection || !rowSection) {
+      throw new Error('無効なヒントファイル形式です。');
+    }
+
+    // 各セクションからヒントを抽出し、数値の2次元配列に変換
+    const colHints = colSection[1].trim().split('\n')
+      .filter(line => line.trim() !== '')
+      .map(line => line.split(',').map(Number));
+    const rowHints = rowSection[1].trim().split('\n')
+      .filter(line => line.trim() !== '')
+      .map(line => line.split(',').map(Number));
+
+    // 横と縦のヒントの合計が同じかどうかをチェック
+    const rowSum = rowHints.reduce((a, b) => a + b.reduce((c, d) => c + d, 0), 0);
+    const colSum = colHints.reduce((a, b) => a + b.reduce((c, d) => c + d, 0), 0);
+    if (rowSum !== colSum) {
+      window.alert(`横のヒントの合計${rowSum} ≠ 縦のヒントの合計${colSum} です`);
+      return;
+    }
+
+    // グリッドサイズを更新
+    numCols = colHints.length;
+    numRows = rowHints.length;
+    initializeGrid(numCols, numRows);
+
+    (document.getElementById('width') as HTMLInputElement).value = numCols.toString();
+    (document.getElementById('height') as HTMLInputElement).value = numRows.toString();
+    (document.getElementById('blackRatio') as HTMLInputElement).value = Math.round(rowSum / (numCols * numRows) * 100).toString();
+
+    // ヒントをセット（数値配列をカンマ区切りの文字列に変換）
+    for (let i = 1; i <= numCols; i++) {
+      cells[0][i].textContent = colHints[i - 1].join(',');
+    }
+    for (let i = 1; i <= numRows; i++) {
+      cells[i][0].textContent = rowHints[i - 1].join(',');
+    }
+
+  } catch (error) {
+    console.error('Error loading hints:', error);
+    alert('ヒントファイルの読み込みに失敗しました。');
+  }
+}
 
 /**
  * イベントを初期化する
@@ -75,9 +141,13 @@ function initializeEvents() {
     setDragStyle(e, false);
 
     const file = e.dataTransfer?.files[0];
-    if (file && file.type.startsWith('image/')) {
-      loadImageToGrid(file);
-      setEditMode(true);
+    if (file) {
+      if (file.type.startsWith('image/')) {
+        loadImageToGrid(file);
+        setEditMode(true);
+      } else if (file.name.endsWith('.hint')) {
+        loadHints(file);
+      }
     }
   }
 
@@ -450,19 +520,38 @@ function getOneLineHintString(isRow: boolean, num: number): string {
 }
 
 /**
- * ヒントを生成する
+ * ヒント配列を生成する関数
+ * @param isRow - true または false
+ * @param length - 行数 または 列数
+ * @returns 生成されたヒント配列 例:['1,3,1','2,3']
  */
+function makeHintArray(isRow: boolean, length: number): string[] {
+  return Array.from({ length }, (_, i) =>
+    getOneLineHintString(isRow, i + 1));
+}
+
+function saveHint() {
+  makeHints();
+
+  const colHints = makeHintArray(true, numCols);
+  const rowHints = makeHintArray(false, numRows);
+
+  const colHintsString = "[ColHints]\n" + colHints.join('\n');
+  const rowHintsString = "[RowHints]\n" + rowHints.join('\n');
+
+  const blob = new Blob([colHintsString + '\n\n' + rowHintsString], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `hints.hint`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/**
+* ヒントを生成する
+*/
 function makeHints() {
-  /**
-   * ヒント配列を生成する関数
-   * @param isRow - true または false
-   * @param length - 行数 または 列数
-   * @returns 生成されたヒント配列 例:['1,3,1','2,3']
-   */
-  function makeHintArray(isRow: boolean, length: number): string[] {
-    return Array.from({ length }, (_, i) =>
-      getOneLineHintString(isRow, i + 1));
-  }
   msg.textContent = '';
   setEditMode(false);
 
