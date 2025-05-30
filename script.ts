@@ -699,12 +699,9 @@ async function baseSolve(cellBoard: number[][], rowHints: number[][], colHints: 
   let result = 0;
 
   const drawPerFrame = parseInt((document.getElementById('frames') as HTMLInputElement).value) || 0;
-  let drawer: AnimationDrawer | null = null;
-  if (isAnimation) {
-    drawer = new AnimationDrawer((x, y, color) => {
-      cells[y + 1][x + 1].textContent = String(color);
-    }, drawPerFrame);
-  }
+  const drawer = isAnimation ? new AnimationDrawer((x, y, color) => {
+    cells[y + 1][x + 1].textContent = String(color);
+  }, drawPerFrame) : null;
 
   // 確定できるマスがある間は繰り返す
   let count = 99; // 確定したマスの数
@@ -714,7 +711,7 @@ async function baseSolve(cellBoard: number[][], rowHints: number[][], colHints: 
     // 各行についてfixLineCellsを実行
     for (let y = 0; y < numRows; y++) {
       // 行データを取得
-      const lineCells: number[] = Array.from(colHints, (_, i) => cellBoard[y][i]);
+      const lineCells: number[] = Array.from(colHints, (_, x) => cellBoard[y][x]);
       const [cnt, updatedLineCells]: [number, number[]] = fixLineCells(rowHints[y], lineCells);
       if (cnt === -1) return -1;
       if (cnt > 0) {
@@ -729,7 +726,7 @@ async function baseSolve(cellBoard: number[][], rowHints: number[][], colHints: 
     // 各列についてfixLineCellsを実行
     for (let x = 0; x < numCols; x++) {
       // 列データを取得
-      const lineCells: number[] = Array.from(rowHints, (_, i) => cellBoard[i][x]);
+      const lineCells: number[] = Array.from(rowHints, (_, y) => cellBoard[y][x]);
       const [cnt, updatedLineCells]: [number, number[]] = fixLineCells(colHints[x], lineCells);
       if (cnt === -1) return -1;
       if (cnt > 0) {
