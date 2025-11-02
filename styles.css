@@ -1,6 +1,7 @@
 /* styles.css */
 :root {
   --border-color: gray;
+  --unknown-bg-color: white;
 }
 
 .grid {
@@ -71,7 +72,7 @@
 }
 
 .Unknown {
-  background-color: white;
+  background-color: var(--unknown-bg-color);
 }
 
 .Six-ten {

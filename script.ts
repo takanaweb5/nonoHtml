@@ -576,6 +576,7 @@ function makeHints() {
  * すべてのセルをクリアする。
  */
 async function clearGrid() {
+  document.documentElement.style.setProperty('--unknown-bg-color', 'white');
   msg.textContent = '';
   for (let row = 1; row <= numRows; row++) {
     for (let col = 1; col <= numCols; col++) {
@@ -683,6 +684,8 @@ async function mainSolve() {
     msg.textContent += `　完成しました　時間: ${elapsedSec} 秒`;
   } else {
     msg.textContent += `　未完成　時間: ${elapsedSec} 秒`;
+    // 未完成のマスを赤色でハイライト
+    document.documentElement.style.setProperty('--unknown-bg-color', 'rgba(255, 0, 0, 0.3)');
   }
 }
 
@@ -712,7 +715,7 @@ async function baseSolve(cellBoard: number[][], rowHints: number[][], colHints: 
     for (let y = 0; y < numRows; y++) {
       // 行データを取得
       const lineCells: number[] = Array.from(colHints, (_, x) => cellBoard[y][x]);
-      const [cnt, updatedLineCells]: [number, number[]] = fixLineCells(rowHints[y], lineCells);
+      const { cnt, updatedLineCells } = fixLineCells(rowHints[y], lineCells);
       if (cnt === -1) return -1;
       if (cnt > 0) {
         for (let x = 0; x < numCols; x++) {
@@ -727,7 +730,7 @@ async function baseSolve(cellBoard: number[][], rowHints: number[][], colHints: 
     for (let x = 0; x < numCols; x++) {
       // 列データを取得
       const lineCells: number[] = Array.from(rowHints, (_, y) => cellBoard[y][x]);
-      const [cnt, updatedLineCells]: [number, number[]] = fixLineCells(colHints[x], lineCells);
+      const { cnt, updatedLineCells } = fixLineCells(colHints[x], lineCells);
       if (cnt === -1) return -1;
       if (cnt > 0) {
         for (let y = 0; y < numRows; y++) {
@@ -829,10 +832,10 @@ function leftAlignLineCells(lineHints: number[], lineCells: number[]): number[] 
  * - number: 確定したマスの数、エラー時は-1
  * - number[]: 確定可能なマスを全て確定した後の配列  例：[黒,黒,白,未,黒,未]
  */
-function fixLineCells(lineHints: number[], lineCells: number[]): [number, number[]] {
+function fixLineCells(lineHints: number[], lineCells: number[]): { cnt: number, updatedLineCells: number[] } {
   // ブロックを左寄せする
   const leftAligned = leftAlignLineCells(lineHints, lineCells);
-  if (leftAligned === null) return [-1, []];
+  if (leftAligned === null) return { cnt: -1, updatedLineCells: [] };
 
   // ブロックを右寄せする
   // const tmp1 = [...lineHints].reverse();
@@ -856,7 +859,7 @@ function fixLineCells(lineHints: number[], lineCells: number[]): [number, number
       testLineCells[i] = UNKNOWN;
     }
   }
-  return [count, result];
+  return { cnt: count, updatedLineCells: result };
 }
 
 /**
@@ -883,8 +886,8 @@ async function solve2D(cellBoard: number[][], rowHints: number[][], colHints: nu
       if (value === BLACK) await drawer.draw(x, y, value);
 
       // 高速化のため対象の列か行に確定マスがある場合のみ仮定を実行
-      if (fixLineCells(rowHints[y], testCellBoard[y])[0] > 0 ||
-        fixLineCells(colHints[x], testCellBoard.map(row => row[x]))[0] > 0) {
+      if (fixLineCells(rowHints[y], testCellBoard[y]).cnt > 0 ||
+        fixLineCells(colHints[x], testCellBoard.map(row => row[x])).cnt > 0) {
         const cnt = await baseSolve(testCellBoard, rowHints, colHints, false);
         if (cnt === -1) {
           // 矛盾した場合、反対の色で確定
